@@ -1,0 +1,10 @@
+-- Planetary Analog Finder: DuckDB schema
+--
+-- providers/duckdb_provider.ts runs this file, then database/seed.sql, in one
+-- transaction against an in-memory DuckDB database at every server boot.
+-- Plain DuckDB SQL: it also runs in the DuckDB CLI (`.read database/schema.sql`).
+--
+-- Phase 2.3 adds here:
+--   CREATE TYPE world AS ENUM ('MOON', 'MARS');
+--   CREATE TABLE planetary_references (...);
+--   CREATE TABLE earth_candidates (...);

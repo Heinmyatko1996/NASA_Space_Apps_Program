@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+{{--
+  Base HTML shell for the Planetary Analog Finder.
+  Vite loads the kit's stylesheet and Alpine.js bundle; no CDN assets.
+  Dark is the default theme until the visitor toggles it (app_theme cookie).
+
+  Usage:
+  @layouts.main({ title: 'Discover' })
+  ...
+  @end
+--}}
+<html
+  lang="en-us"
+  data-theme="{{
+    request.plainCookie('app_theme', {
+      defaultValue: 'dark',
+      encoded: false,
+    })
+  }}"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      {{
+        $props.get('title')
+          ? `${$props.get('title')} — Planetary Analog Finder`
+          : 'Planetary Analog Finder'
+      }}
+    </title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('dumper')
+  </head>
+  <body>
+    <header class="header header--bar">
+      <div class="header__inner">
+        @link({
+          route: 'home',
+          class: 'brand',
+          'aria-label': 'Planetary Analog Finder home',
+        })
+          @svg('lucide:satellite', { width: 20, height: 20 })
+          <span>Planetary Analog Finder</span>
+        @end
+
+        <div class="header__right">
+          @!themeToggle()
+        </div>
+      </div>
+    </header>
+    {{{ await $slots.main() }}}
+    @include('partials/flash_alerts')
+  </body>
+</html>

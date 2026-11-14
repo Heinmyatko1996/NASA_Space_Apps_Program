@@ -1,0 +1,9 @@
+-- Planetary Analog Finder: DuckDB seed data
+--
+-- Runs right after database/schema.sql, in the same transaction. CSV paths are
+-- relative to the app root (DuckDB's file_search_path is set to it), so they
+-- resolve both in development and in the production build.
+--
+-- Phase 2.4 adds here:
+--   INSERT INTO planetary_references SELECT ... FROM read_csv('database/seeds/planetary_references.csv');
+--   INSERT INTO earth_candidates SELECT ..., string_split(tags, '|') FROM read_csv('database/seeds/earth_candidates.csv');

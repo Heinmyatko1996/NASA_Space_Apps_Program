@@ -81,13 +81,15 @@ planetary-analog-finder/
 ### Phase 1: Environment Setup & AdonisJS Hypermedia Scaffolding (Hours 0–3)
 **Objective:** Initialize the AdonisJS v7 Hypermedia stack, strip its built-in authentication and Lucid, theme the kit's CSS, and wire DuckDB into the app lifecycle.
 
-- [ ] **1.1 Initialize Project (Node.js 24+, required by the v7 kit):**
+- [x] **1.1 Initialize Project (Node.js 24.11.1+):**
   ```bash
   npm create adonisjs@latest planetary-analog-finder -- --kit=hypermedia
   cd planetary-analog-finder
   npm install @duckdb/node-api
   ```
-- [ ] **1.2 Remove Built-in Authentication:** The app is a public, anonymous tool with no accounts or user data, but the Hypermedia kit ships with session-based signup/login. Strip it right after scaffolding:
+  - Node 24.0–24.11.0 crash `npm run dev`: `hot-hook` falls back to `module.register()` hooks there, and CommonJS packages then fail to load (`ERR_INVALID_RETURN_PROPERTY_VALUE`); importing `@duckdb/node-api` through the TypeScript loader also hits `ERR_INTERNAL_ASSERTION`. `package.json` `engines` requires `>=24.11.1`, and `.nvmrc` pins Node 26 (the current LTS).
+  - The installer refuses a non-empty folder, so it scaffolds into a subfolder whose files then move to the repo root next to `plan.md`.
+- [x] **1.2 Remove Built-in Authentication:** The app is a public, anonymous tool with no accounts or user data, but the Hypermedia kit ships with session-based signup/login. Strip it right after scaffolding:
   - Uninstall the package: `npm uninstall @adonisjs/auth`.
   - Delete auth files: `config/auth.ts`, `app/models/user.ts`, `app/validators/user.ts`, `app/controllers/new_account_controller.ts`, `app/controllers/session_controller.ts`, `app/middleware/{auth,guest,silent_auth}_middleware.ts`, `resources/views/pages/auth/`, and `resources/views/pages/dashboard.edge`.
   - Delete the account layouts `resources/views/components/layouts/{app,auth,settings}.edge` (they hold the logout form and dashboard nav). In `layouts/marketing.edge`, which the kit's `home.edge` uses until it is rebuilt on `main.edge`, remove the `@if(auth?.user)` block with the Sign in / Get started / Dashboard links.
@@ -96,21 +98,23 @@ planetary-analog-finder/
   - `start/routes.ts`: remove the signup, login, logout, and dashboard route groups.
   - `tests/bootstrap.ts`: remove the `authBrowserClient` plugin.
   - Keep `@adonisjs/session` and `@adonisjs/shield`; flash messages and CSRF protection still depend on them.
-- [ ] **1.3 Remove Lucid (DuckDB replaces it):**
+- [x] **1.3 Remove Lucid (DuckDB replaces it):**
   - Uninstall the packages: `npm uninstall @adonisjs/lucid better-sqlite3`, and drop `better-sqlite3` from `allowScripts` in `package.json`.
   - Delete `config/database.ts`, `database/schema.ts`, `database/schema_rules.ts`, and `database/migrations/`.
   - `adonisrc.ts`: remove `@adonisjs/lucid/commands` and `@adonisjs/lucid/database_provider`.
+  - `config/session.ts`: remove the `database` session store, and drop `'database'` from `SESSION_DRIVER` in `start/env.ts`. The session provider resolves every configured store, and this one needs Lucid, so every request returns a 500 (`Cannot resolve binding "lucid.db"`).
   - `tests/bootstrap.ts`: remove the `dbAssertions` plugin.
   - Keep `luxon`; the kit's `start/validator.ts` still uses it.
-- [ ] **1.4 Configure Frontend Shell (`resources/views/components/layouts/main.edge`):**
+- [x] **1.4 Configure Frontend Shell (`resources/views/components/layouts/main.edge`):**
   - Build `main.edge` from the `<head>` of the kit's `marketing.edge`: `@vite(['resources/css/app.css', 'resources/js/app.js'])` loads the kit's stylesheet and its Alpine.js bundle. No CDN `<script>` or `<link>` tags.
   - Set up the dark space-telemetry theme by rendering `<html data-theme="dark">` by default and adjusting the kit's color tokens in `app.css` (`--paper`, `--card`, `--ink`, `--line`). Use `var(--mono)` for numeric readouts. Keep the kit's `themeToggle` component.
   - Use the kit's `edge-iconify` Lucide icons for UI glyphs (e.g., `@svg('lucide:satellite')`, `@svg('lucide:map-pin')`).
-- [ ] **1.5 Wire DuckDB into the App Lifecycle (`node ace make:provider duckdb`):**
+- [x] **1.5 Wire DuckDB into the App Lifecycle (`node ace make:provider duckdb --register`):**
   - `register()`: bind `DuckDbService` as a container singleton.
-  - `start()`: `DuckDBInstance.create(':memory:')`, connect, `SET file_search_path = '<app.makePath()>'`, then run `database/schema.sql` and `database/seed.sql` inside one `BEGIN … COMMIT`. Each file is a single `connection.run(sql)` call, because `run()` without parameters executes every statement in the string.
-  - `shutdown()`: `connection.closeSync()`.
-  - `DuckDbService.all<T>(sql, params)` wraps `connection.runAndReadAll(sql, params).getRowObjectsJS()` with named `$param` bindings and structured error logging.
+  - `start()`: `DuckDBInstance.create(':memory:', { file_search_path: app.makePath() })`, then run `database/schema.sql` and `database/seed.sql` on one connection inside one `BEGIN … COMMIT` (`DuckDbService.runScripts`). Each file is a single `connection.run(sql)` call, because `run()` without parameters executes every statement in the string. A failing script rolls back and stops the app from starting.
+  - `shutdown()`: close the DuckDB instance.
+  - `DuckDbService.all<T>(sql, params)` / `first<T>()` wrap `connection.runAndReadAll(sql, params).getRowObjectsJS()` with named `$param` bindings and structured error logging. Each call opens its own short-lived connection (under 0.1 ms), so concurrent requests run in parallel instead of queueing on one shared connection.
+  - `adonisrc.ts` `metaFiles` copies `database/**/*.sql` and `database/seeds/*.csv` into the build and restarts the dev server when they change.
   - **Why in memory:** DuckDB locks a database file to one process, so while `node ace serve` holds `analog.duckdb`, no other process (such as a seed command) can open it, even read-only. The data is fully derived from the seed CSVs and the app never writes, so rebuilding at boot takes a few milliseconds and avoids the lock.
   - **Gotcha:** `BIGINT` results such as `count(*)` come back as JS `bigint` (`3n`). Cast them to `INTEGER` in SQL before passing rows to Edge.
 
@@ -133,7 +137,7 @@ planetary-analog-finder/
 - [ ] **2.4 Write the Seed (`database/seed.sql`):**
   - `INSERT INTO earth_candidates SELECT …, string_split(tags, '|') FROM read_csv('database/seeds/earth_candidates.csv');` and the same for `planetary_references`. Paths resolve through `file_search_path`, so they work in dev and in the production build.
   - Both SQL files are plain DuckDB SQL. To explore the data, run them in the DuckDB CLI from the project root (`.read database/schema.sql`, then `.read database/seed.sql`).
-  - Add `database/**/*.sql` and `database/seeds/*.csv` to `metaFiles` in `adonisrc.ts` so `node ace build` copies them.
+  - `node ace build` copies these files through the `metaFiles` entries added in step 1.5.
 
 ---
 
