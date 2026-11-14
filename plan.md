@@ -58,6 +58,7 @@ planetary-analog-finder/
 │   │   └── app.js                      # Alpine components: partial swaps, presets, map layers
 │   └── views/
 │       ├── components/
+│       │   ├── earth_map.edge          # Full-globe NASA Earth image + graticule + markers
 │       │   └── layouts/
 │       │       └── main.edge           # Base HTML shell (@vite loads app.css + app.js)
 │       ├── pages/
@@ -164,10 +165,15 @@ planetary-analog-finder/
   - Given a bounding box, build a NASA GIBS WMS `GetMap` URL (`EPSG:4326`, fixed width/height, `image/jpeg`). WMS 1.3.0 expects the `EPSG:4326` `BBOX` in lat/lon axis order.
   - Project each candidate's lat/lon to `left %` / `top %` inside that box. EPSG:4326 imagery is equirectangular, so the projection is a linear interpolation.
   - For the planetary panel, compute the Moon/Mars Trek WMTS tile row/column that contains the reference site and return that tile URL.
-- [ ] **4.2 Render `partials/analog_map.edge` with Every Discovery Result:**
-  - Show a world overview image with absolutely positioned, color-coded similarity pins (score bands map to CSS classes).
+- [ ] **4.2 Render the Earth Map (`resources/views/components/earth_map.edge`):**
+  - Build a reusable Edge component that renders a full-globe Earth image: a GIBS WMS `GetMap` request with `BBOX=-90,-180,90,180`, a 2:1 width/height ratio (e.g., `2048×1024`), and the VIIRS or Blue Marble true-color layer.
+  - Wrap the `<img>` in a `position: relative` container with `aspect-ratio: 2 / 1` so the layout is fixed before the image loads, and give it `alt` text and a `loading` skeleton.
+  - Overlay a CSS graticule (lat/lon lines every 30°) and the equator for orientation. The component accepts a `markers` prop (`{ lat, lon, label, scoreBand }[]`) and places each one with the same linear lat/lon → `left %` / `top %` projection.
+  - Render it on `home.edge` at page load, before any discovery runs, so users see the Earth map immediately.
+- [ ] **4.3 Render `partials/analog_map.edge` with Every Discovery Result:**
+  - Reuse the `earth_map` component as the world overview, passing the ranked candidates as color-coded similarity pins (score bands map to CSS classes).
   - Show an inset zoomed to the #1 ranked site (±2° box), replacing a client-side `flyTo`. Clicking a card or pin calls `$swap('/partials/map?candidateId=…', '#map-inset')` to re-center the inset.
-- [ ] **4.3 Add NASA GIBS Layer Switcher:**
+- [ ] **4.4 Add NASA GIBS Layer Switcher:**
   - Alpine buttons switch the snapshot `src` between GIBS layers (VIIRS True Color, MODIS Land Surface Temperature, ASTER GDEM Elevation) for the matched Earth analog site. The service pre-builds one URL per layer.
 
 ---
