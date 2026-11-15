@@ -1,0 +1,87 @@
+{{--
+  Earth reference-region inset (plan.md 5.4, 5.5). Expects `map` from
+  MapSnapshotService.inset() plus `title`. Numbered markers sit at each
+  ranked candidate cell; the dashed rectangle is the region's cell coverage.
+  Each marker links to its card (#candidate-N), so it works without
+  JavaScript; with it, the `analogMap` component highlights the pair and
+  switches context layers. Layers are context only: the ranking uses
+  terrain features alone.
+--}}
+<figure class="analog-map" data-layers="{{ JSON.stringify(map.layers.map((layer) => ({ id: layer.id, src: layer.src }))) }}">
+  <figcaption class="analog-map__title">
+    <span class="tag">Where the matches are</span>
+    <span class="analog-map__region">{{ map.title }}</span>
+  </figcaption>
+
+  <div class="analog-map__frame">
+    <span class="map-placeholder" aria-hidden="true">Loading NASA imagery…</span>
+    <img
+      class="analog-map__img"
+      src="{{ map.layers[0].src }}"
+      :src="layerSrc($store.map.layer)"
+      width="{{ map.size }}"
+      height="{{ map.size }}"
+      alt="NASA satellite image of {{ map.title }} with its ranked Earth candidate cells marked by rank"
+      loading="lazy"
+      decoding="async"
+    />
+    <span
+      class="analog-map__outline"
+      aria-hidden="true"
+      style="left: {{ map.outline.leftPct }}%; top: {{ map.outline.topPct }}%; width: {{ map.outline.widthPct }}%; height: {{ map.outline.heightPct }}%"
+    ></span>
+    {{-- Markers that would overlap share one pill (MapSnapshotService.groupMarkers). --}}
+    @each((group, index) in map.markers)
+      <span
+        class="marker-group marker-group--{{ group.direction }}"
+        style="left: {{ group.leftPct }}%; top: {{ group.topPct }}%; z-index: {{ 100 - index }}"
+      >
+        @each(member in group.members)
+          <a
+            class="map-marker"
+            href="#candidate-{{ member.rank }}"
+            data-rank="{{ member.rank }}"
+            title="#{{ member.rank }} · {{ member.cellId }}"
+            aria-label="Rank {{ member.rank }}: {{ member.cellId }}"
+          >{{ member.rank }}</a>
+        @end
+      </span>
+    @end
+  </div>
+
+  <div class="layer-switch" role="group" aria-label="Map layer">
+    @each((layer, index) in map.layers)
+      <button
+        type="button"
+        class="chip"
+        data-layer="{{ layer.id }}"
+        aria-pressed="{{ index === 0 ? 'true' : 'false' }}"
+        :aria-pressed="($store.map.layer === $el.dataset.layer).toString()"
+        @click="$store.map.layer = $el.dataset.layer"
+      >
+        {{ layer.label }}
+      </button>
+    @end
+  </div>
+
+  @each((layer, index) in map.layers)
+    <div
+      class="map-caption"
+      data-layer="{{ layer.id }}"
+      {{ index === 0 ? '' : 'hidden' }}
+      :hidden="$store.map.layer !== $el.dataset.layer"
+    >
+      <p>{{ layer.caption }} Context only: the ranking uses terrain features alone.</p>
+      @if(layer.legend)
+        <img
+          class="map-legend"
+          src="{{ layer.legend.url }}"
+          width="378"
+          height="86"
+          alt="{{ layer.legend.alt }}"
+          loading="lazy"
+        />
+      @end
+    </div>
+  @end
+</figure>

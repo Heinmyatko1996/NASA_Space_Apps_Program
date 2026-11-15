@@ -1,0 +1,30 @@
+import '@adonisjs/core/types/http'
+
+type ParamValue = string | number | bigint | boolean
+
+export type ScannedRoutes = {
+  ALL: {
+    'home': { paramsTuple?: []; params?: {} }
+    'partials.regions': { paramsTuple?: []; params?: {} }
+    'partials.discover': { paramsTuple?: []; params?: {} }
+    'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
+  }
+  GET: {
+    'home': { paramsTuple?: []; params?: {} }
+    'partials.regions': { paramsTuple?: []; params?: {} }
+    'partials.discover': { paramsTuple?: []; params?: {} }
+    'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
+  }
+  HEAD: {
+    'home': { paramsTuple?: []; params?: {} }
+    'partials.regions': { paramsTuple?: []; params?: {} }
+    'partials.discover': { paramsTuple?: []; params?: {} }
+    'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
+  }
+}
+declare module '@adonisjs/core/types/http' {
+  export interface RoutesList extends ScannedRoutes {}
+}

@@ -1,0 +1,38 @@
+{{--
+  Full-globe Earth map (plan.md 5.3). Expects `map` from
+  MapSnapshotService.globe(): a NASA GIBS image URL, a 30° graticule, and
+  markers placed in percent of the image (plate carrée is linear in lat/lon).
+  The 2:1 frame fixes the layout before the image loads; its background is
+  the loading placeholder.
+--}}
+<figure class="earth-map">
+  <div class="earth-map__frame">
+    <span class="map-placeholder" aria-hidden="true">Loading NASA imagery…</span>
+    <img
+      class="earth-map__img"
+      src="{{ map.src }}"
+      width="{{ map.width }}"
+      height="{{ map.height }}"
+      alt="{{ alt }}"
+      loading="lazy"
+      decoding="async"
+    />
+    <div class="graticule" aria-hidden="true">
+      @each(line in map.graticule.meridians)
+        <span class="graticule__meridian {{ line.primary ? 'is-primary' : '' }}" style="left: {{ line.leftPct }}%"></span>
+      @end
+      @each(line in map.graticule.parallels)
+        <span class="graticule__parallel {{ line.primary ? 'is-primary' : '' }}" style="top: {{ line.topPct }}%"></span>
+      @end
+    </div>
+    <ul class="earth-map__markers" aria-label="Earth reference regions">
+      @each(marker in map.markers)
+        <li class="region-marker" style="left: {{ marker.leftPct }}%; top: {{ marker.topPct }}%">
+          <span class="region-marker__dot" aria-hidden="true"></span>
+          <span class="region-marker__label">{{ marker.label }}</span>
+        </li>
+      @end
+    </ul>
+  </div>
+  <figcaption class="map-caption">{{ map.caption }} Grid lines every 30°; the equator and prime meridian are brighter.</figcaption>
+</figure>

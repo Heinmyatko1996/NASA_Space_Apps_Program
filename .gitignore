@@ -1,25 +1,49 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
+# Dependencies and AdonisJS build
+node_modules
+build
+tmp/*
+!tmp/.gitkeep
 
-# Jupyter
-.ipynb_checkpoints/
+# Secrets
+.env
+.env.local
+.env.production.local
+.env.development.local
 
-# IDE
-.idea/
-.vscode/
+# Frontend assets compiled code
+public/assets
 
-# macOS
+# Build tools specific
+npm-debug.log
+yarn-error.log
+
+# Editors specific
+.fleet
+.idea
+.vscode
+
+# Platform specific
 .DS_Store
 
-# Environment variables
-.env
+# TerraTwin data: only the three processed Parquet files are committed.
+# Raw downloads, AOI clips, intermediate rasters and DuckDB files stay local.
+/data/*
+!/data/processed/
+/data/processed/*
+!/data/processed/parquet/
+/data/processed/parquet/*
+!/data/processed/parquet/*_5km_500m.parquet
 
-# Raw and processed geospatial data
-data/raw/
-data/processed/
-
-# Generated results
-results/
+# Hein's pipeline and analysis files live on main, not in the website repo
+/docs/findings/
+/queries/catalog/
+/queries/results/
+/notebooks/
+/scripts/
+/dataset_to_download.md
+/main.py
+/pyproject.toml
+/uv.lock
+/.python-version
+.venv/
+__pycache__/

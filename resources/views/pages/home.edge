@@ -1,0 +1,217 @@
+{{--
+  The discovery journey on one page (plan.md Phase 4):
+  Explore (baseline cards) → Configure (form) → Analyze → Understand (results).
+  Results swap into #results without a reload; the same URL also renders
+  them server-side, so a shared link reproduces the result.
+--}}
+@layouts.main({ title: 'Discover' })
+  <main class="discover" x-data="discovery">
+    <section class="intro">
+      <p class="tag">NASA Space Apps 2026 · TerraTwin terrain model</p>
+      <h1 class="intro__title">Find Earth terrain that resembles the Moon and Mars</h1>
+      <p class="intro__lead">
+        Pick a target region and the terrain features to compare. Every 5 km cell of the target is ranked against every eligible Earth cell by standardized terrain distance:
+        <strong>lower means closer</strong>.
+      </p>
+    </section>
+
+    <section class="explore" aria-labelledby="explore-title">
+      <header class="block-header">
+        <h2 id="explore-title" class="block-title">Explore</h2>
+        <p class="block-desc">
+          Baseline examples from the precomputed ranking: all three terrain features, Atacama reference.
+        </p>
+      </header>
+      <div class="explore__grid">
+        @each(example in baselines)
+          @include('partials/explore_card')
+        @end
+      </div>
+      <section class="earth-overview" aria-labelledby="earth-title">
+        <h3 id="earth-title" class="block-title">Earth reference regions</h3>
+        <p class="block-desc">
+          Earth candidates come from these regions. Each result shows the selected region up close, with its ranked cells marked.
+        </p>
+        @!component('components/earth_map', {
+          map: earthMap,
+          alt: 'NASA Blue Marble image of the whole Earth with the Earth reference regions marked: ' + earthMap.markers.map((marker) => marker.label).join(', ')
+        })
+      </section>
+    </section>
+
+    <div class="workspace">
+      <section class="configure" aria-labelledby="configure-title">
+        <h2 id="configure-title" class="block-title">Configure</h2>
+
+        <form
+          x-ref="form"
+          class="configure__form"
+          method="GET"
+          action="/"
+          novalidate
+          @submit.prevent="submit()"
+        >
+          <fieldset class="fieldset">
+            <legend class="fieldset__legend">Target world</legend>
+            <div class="choices choices--row">
+              @each(world in form.worlds)
+                <label class="choice">
+                  <input
+                    type="radio"
+                    name="world"
+                    value="{{ world.id }}"
+                    {{ world.checked ? 'checked' : '' }}
+                    @change="changeWorld($event.target.value)"
+                  />
+                  <span class="choice__label">{{ world.label }}</span>
+                </label>
+              @end
+            </div>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset__legend">Target region</legend>
+            <div id="region-selector" class="choices">
+              @include('partials/region_list')
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label class="field__label" for="reference">Earth reference region</label>
+            <select id="reference" name="reference" class="field__input">
+              @each(reference in form.references)
+                <option value="{{ reference.region }}" {{ reference.selected ? 'selected' : '' }}>
+                  {{ reference.label }}
+                  ({{ reference.eligibleCellCount }}
+                  cells)
+                </option>
+              @end
+            </select>
+            @if(form.singleReference)
+              <p class="field__hint">
+                More Earth regions are coming. For now, results are the best analogs within
+                {{ form.references[0].label }}, not worldwide.
+              </p>
+            @end
+          </div>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset__legend">Terrain features to compare</legend>
+            <div class="choices">
+              @each(feature in form.features)
+                <label class="choice choice--stacked">
+                  <input
+                    type="checkbox"
+                    name="features[]"
+                    value="{{ feature.id }}"
+                    {{ feature.checked ? 'checked' : '' }}
+                  />
+                  <span class="choice__label">{{ feature.label }}</span>
+                  <span class="choice__meta">{{ feature.unit }}</span>
+                  <span class="choice__help">{{ feature.description }}</span>
+                </label>
+              @end
+            </div>
+            <div class="presets" role="group" aria-label="Quick presets">
+              <span class="tag">Presets</span>
+              @each(preset in form.presets)
+                <button
+                  type="button"
+                  class="chip"
+                  data-features="{{ preset.features.join(',') }}"
+                  @click="applyPreset($el.dataset.features.split(','))"
+                >
+                  {{ preset.label }}
+                </button>
+              @end
+            </div>
+          </fieldset>
+
+          <div class="field">
+            <label class="field__label" for="topN">Earth candidates per target cell</label>
+            <input
+              id="topN"
+              name="topN"
+              type="number"
+              class="field__input field__input--narrow"
+              min="1"
+              max="{{ form.maxTopN }}"
+              step="1"
+              value="{{ form.topN }}"
+            />
+            <p class="field__hint">From 1 to {{ form.maxTopN }}. Applies to each target cell.</p>
+          </div>
+
+          <div class="configure__actions">
+            <button type="submit" class="btn btn--primary btn--block">
+              @svg('lucide:radar', { width: 16, height: 16 })
+              <span>Run discovery</span>
+            </button>
+            <p
+              class="status"
+              role="status"
+              x-text="$store.ui.loading ? 'Ranking terrain…' : ''"
+            ></p>
+          </div>
+        </form>
+      </section>
+
+      <section
+        id="results"
+        class="results"
+        aria-labelledby="results-title"
+        :class="{ 'is-loading': $store.ui.loading }"
+      >
+        <h2 id="results-title" class="sr-only">Results</h2>
+        @if(problems.length)
+          @include('partials/problems')
+        @elseif(results)
+          @include('partials/discovery_results')
+        @else
+          <div class="empty-results">
+            @svg('lucide:globe', { width: 28, height: 28 })
+            <p class="empty-results__title">No discovery run yet</p>
+            <p class="empty-results__text">
+              Choose a target and the features to compare, then run discovery. You can also start from an Explore example above.
+            </p>
+          </div>
+        @end
+      </section>
+    </div>
+
+    {{--
+      Candidate detail (plan.md 6.1). "Inspect match" swaps the detail
+      partial in and opens this as a modal dialog (Esc or a backdrop click
+      closes it). A shared `inspect=` link renders it open on the server,
+      which also works without JavaScript; `form method="dialog"` closes it.
+    --}}
+    <dialog
+      id="candidate-dialog"
+      class="detail-dialog"
+      aria-labelledby="detail-title"
+      x-data="candidateDialog"
+      @inspect-candidate.window="open($event.detail)"
+      @click="backdrop($event)"
+      @close="closed()"
+      {{ detail ? 'open' : '' }}
+    >
+      <div class="detail-dialog__body" x-ref="body">
+        @if(detail)
+          @include('partials/candidate_detail')
+        @end
+      </div>
+      <template x-ref="skeleton">
+        <div class="detail-skeleton" aria-hidden="true">
+          <span class="skeleton skeleton--title"></span>
+          <span class="skeleton skeleton--line"></span>
+          <div class="detail-skeleton__places">
+            <span class="skeleton skeleton--block"></span>
+            <span class="skeleton skeleton--block"></span>
+          </div>
+          <span class="skeleton skeleton--table"></span>
+        </div>
+        <p class="sr-only" role="status">Loading match details…</p>
+      </template>
+    </dialog>
+  </main>
+@end

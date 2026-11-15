@@ -1,0 +1,13 @@
+{{--
+  Target cells of the grid in discovery_results.edge. Expects `results`.
+  One line per cell on purpose: a run has ~400 cells, and indented
+  multi-line attributes add ~50 KB per response. This file is listed in
+  .prettierignore so formatting doesn't expand it again.
+--}}
+@each(gridCell in results.grid.cells)
+@if(gridCell.band)
+<a class="cell {{ gridCell.cellId === results.selectedCellId ? 'is-selected' : '' }}" href="{{ gridCell.href }}" data-cell="{{ gridCell.cellId }}" data-band="{{ gridCell.band }}" data-value="{{ gridCell.distanceText }}" data-detail="{{ gridCell.bandLabel }} in this run · {{ gridCell.coordinates }}" style="grid-area:{{ gridCell.row }}/{{ gridCell.col }}" aria-label="{{ gridCell.label }}" {{ gridCell.cellId === results.selectedCellId ? 'aria-current=true' : '' }}></a>
+@else
+<span class="cell cell--excluded" data-cell="{{ gridCell.cellId }}" data-value="Excluded" data-detail="Less than 95% data coverage · {{ gridCell.coordinates }}" style="grid-area:{{ gridCell.row }}/{{ gridCell.col }}"></span>
+@end
+@end
