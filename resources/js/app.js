@@ -194,4 +194,51 @@ Alpine.data('cellGrid', function () {
   }
 })
 
+/*
+| Reference-region inset (partials/analog_map.edge) and its candidate cards.
+| Selecting a numbered marker or a card highlights both; a marker also
+| scrolls its card into view. Markers are links to #candidate-N, so this
+| only enhances the no-JavaScript behavior.
+|
+| $store.map.layer is the GIBS context layer. It lives in a store so the
+| choice survives swapping in another cell's candidates. The image URLs are
+| built on the server and read from the figure's data-layers attribute.
+*/
+Alpine.store('map', { layer: 'trueColor' })
+
+Alpine.data('analogMap', function () {
+  let layers = null
+
+  return {
+    layerSrc(id) {
+      if (layers === null) {
+        try {
+          layers = JSON.parse(this.$root.querySelector('[data-layers]')?.dataset.layers ?? '[]')
+        } catch {
+          layers = []
+        }
+      }
+      const layer = layers.find((entry) => entry.id === id) ?? layers[0]
+      return layer?.src ?? ''
+    },
+
+    pick(event) {
+      const item = event.target.closest('[data-rank]')
+      if (!item || !this.$root.contains(item)) {
+        return
+      }
+      const rank = item.dataset.rank
+      for (const element of this.$root.querySelectorAll('[data-rank]')) {
+        element.classList.toggle('is-active', element.dataset.rank === rank)
+      }
+      if (item.classList.contains('map-marker')) {
+        event.preventDefault()
+        this.$root
+          .querySelector(`.candidate[data-rank="${CSS.escape(rank)}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    },
+  }
+})
+
 Alpine.start()

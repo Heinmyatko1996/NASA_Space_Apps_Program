@@ -10,7 +10,13 @@ import {
   regionOptions,
 } from '#presenters/discovery_presenter'
 import DiscoveryService from '#services/discovery_service'
-import type { Catalog, DiscoveryConfig, ReferenceRegion } from '#services/discovery_service'
+import type {
+  Catalog,
+  CellCandidates,
+  DiscoveryConfig,
+  ReferenceRegion,
+} from '#services/discovery_service'
+import MapSnapshotService from '#services/map_snapshot_service'
 import { validateDiscovery } from '#validators/discovery_validator'
 
 interface Problem {
@@ -28,7 +34,10 @@ interface Problem {
  */
 @inject()
 export default class AnalogsController {
-  constructor(protected discovery: DiscoveryService) {}
+  constructor(
+    protected discovery: DiscoveryService,
+    protected maps: MapSnapshotService
+  ) {}
 
   /**
    * GET / : Explore cards and the Configure form. When the URL carries a
@@ -54,6 +63,7 @@ export default class AnalogsController {
 
     return view.render('pages/home', {
       baselines: await this.#baselines(catalog),
+      earthMap: await this.#earthMap(references),
       form: formState(config, catalog, references),
       regions: regionOptions(catalog, config.world, config.region),
       results,
@@ -90,7 +100,7 @@ export default class AnalogsController {
 
   /** GET /partials/cells/:cellId?… : ranked Earth candidates for one cell. */
   async cell({ params, request, response, view }: HttpContext) {
-    const catalog = await this.discovery.catalog()
+    const [catalog, references] = await this.#catalog()
     let config: DiscoveryConfig
     try {
       config = await validateDiscovery(this.discovery, request.qs())
@@ -113,7 +123,7 @@ export default class AnalogsController {
       })
     }
     return view.render('partials/cell_candidates', {
-      cell: presentCellCandidates(result, config, catalog),
+      cell: await this.#cellView(result, config, catalog, references),
     })
   }
 
@@ -140,8 +150,51 @@ export default class AnalogsController {
     return {
       ...presentRun(run, catalog, references),
       selectedCellId,
-      cell: candidates ? presentCellCandidates(candidates, config, catalog) : null,
+      cell: candidates ? await this.#cellView(candidates, config, catalog, references) : null,
     }
+  }
+
+  /** Candidate cards plus the reference-region inset with their markers. */
+  async #cellView(
+    result: CellCandidates,
+    config: DiscoveryConfig,
+    catalog: Catalog,
+    references: ReferenceRegion[]
+  ) {
+    const extent = await this.discovery.regionExtent('Earth', config.reference)
+    const label =
+      references.find((reference) => reference.region === config.reference)?.label ??
+      config.reference
+    return {
+      ...presentCellCandidates(result, config, catalog),
+      map: extent
+        ? {
+            title: `Earth · ${label}`,
+            ...this.maps.inset(extent, result.candidates),
+          }
+        : null,
+    }
+  }
+
+  /** Full-globe Earth map with one marker per Earth reference region. */
+  async #earthMap(references: ReferenceRegion[]) {
+    const markers = await Promise.all(
+      references.map(async (reference) => {
+        const extent = await this.discovery.regionExtent('Earth', reference.region)
+        return extent
+          ? [
+              {
+                label: reference.label,
+                location: {
+                  latitude: (extent.minLatitude + extent.maxLatitude) / 2,
+                  longitude: (extent.minLongitude + extent.maxLongitude) / 2,
+                },
+              },
+            ]
+          : []
+      })
+    )
+    return this.maps.globe(markers.flat())
   }
 
   /** One Explore card per target region, from Hein's baseline ranking. */

@@ -303,21 +303,21 @@ Invalid settings return a 422 notice listing the problems, and an unknown cell r
 ### Phase 5: Server-Rendered Maps (Hours 22–30)
 **Objective:** Show where the matches are without a client map library. The server builds NASA image URLs and computes marker positions itself.
 
-- [ ] **5.1 Build `MapSnapshotService` (`app/services/map_snapshot_service.ts`):**
+- [x] **5.1 Build `MapSnapshotService` (`app/services/map_snapshot_service.ts`): done, with unit tests in `tests/unit/map_snapshot_service.spec.ts`. The inset box is padded to be square on the ground (a degree of longitude spans cos(lat) of a degree of latitude), so a square image shows the region's true shape. Markers whose pills would overlap are merged into one group (`groupMarkers`), because neighboring 5 km cells are only ~4% of the inset apart; the pill grows leftwards near the right edge. `DiscoveryService.regionExtent` is now cached per region.**
   - Given a bounding box, build a NASA GIBS WMS `GetMap` URL (`EPSG:4326`, fixed width/height, `image/jpeg`). WMS 1.3.0 expects the `EPSG:4326` `BBOX` in lat/lon axis order.
   - Project each candidate's lat/lon to `left %` / `top %` inside that box. EPSG:4326 imagery is equirectangular, so the projection is a linear interpolation.
 - [x] **5.2 Render the Target Cell Grid: built in Phase 4 as a CSS grid (`partials/grid_cells.edge`), not SVG. Only the stretch goal below remains.**
   - An inline SVG with one square per row of `target_cells(planet, region)`, placed by `grid_col` / `grid_row` after offsetting by their minimum. Check the row direction against `latitude_center` and flip if needed so north is up.
   - Fill eligible cells by best-match distance using this run's quartile bands, and hatch ineligible cells with the tooltip "excluded: < 95% data coverage". Each cell is a button that loads its candidates (4.5); the selected cell gets an outline.
   - A grid instead of planetary imagery is intentional: the Moon South Pole region lies near −88° latitude, where equirectangular imagery and linear marker projection break down. Solar System Treks polar imagery behind the grid is a stretch goal.
-- [ ] **5.3 Render the Earth Map (`resources/views/components/earth_map.edge`):**
+- [x] **5.3 Render the Earth Map (`resources/views/components/earth_map.edge`): done with `BlueMarble_NextGeneration` (cloud-free; a daily VIIRS globe has swath gaps), rendered in the Explore section. The placeholder is the frame's background, so it needs no JavaScript.**
   - Build a reusable Edge component that renders a full-globe Earth image: a GIBS WMS `GetMap` request with `BBOX=-90,-180,90,180`, a 2:1 width/height ratio (e.g., `2048×1024`), and the VIIRS or Blue Marble true-color layer.
   - Wrap the `<img>` in a `position: relative` container with `aspect-ratio: 2 / 1` so the layout is fixed before the image loads, and give it `alt` text and a `loading` skeleton.
   - Overlay a CSS graticule (lat/lon lines every 30°) and the equator for orientation. The component accepts a `markers` prop (`{ lat, lon, label, band }[]`) and places each one with the same linear lat/lon → `left %` / `top %` projection.
   - Render it on `home.edge` at page load with a marker for each Earth reference region, so users see the Earth map immediately.
-- [ ] **5.4 Render `partials/analog_map.edge` with Every Result:**
+- [x] **5.4 Render `partials/analog_map.edge` with Every Result: done inside `partials/cell_candidates.edge`, so it updates with every cell swap. The box comes from `region_extent('Earth', <selected reference>)`, not a fixed Atacama box, and a dashed rectangle shows the region's cell coverage. Markers link to `#candidate-N` (works without JavaScript); with JavaScript, selecting a marker or card highlights both.**
   - An Atacama inset built from `region_extent('Earth', 'Atacama')` plus a small margin, with markers for the selected target cell's ranked Earth candidates (numbered by rank). Clicking a card or marker highlights the other.
-- [ ] **5.5 Add a NASA GIBS Layer Switcher:**
+- [x] **5.5 Add a NASA GIBS Layer Switcher: done. Layers (names checked against the GIBS WMS GetCapabilities on 2026-11-15): `VIIRS_NOAA20_CorrectedReflectance_TrueColor` (TIME 2026-11-01), `MODIS_Terra_L3_Land_Surface_Temp_8Day_Day` (TIME 2026-10-24, with the GIBS legend image), and `ASTER_GDEM_Color_Shaded_Relief`. Dates are pinned so the demo images never change and never show a partly acquired day. `$store.map.layer` keeps the choice across cell swaps.**
   - Alpine buttons switch the inset `src` between GIBS layers (VIIRS True Color, MODIS Land Surface Temperature, ASTER GDEM Elevation) for context. The service pre-builds one URL per layer. These layers are context only; the ranking uses terrain features alone.
 
 ---

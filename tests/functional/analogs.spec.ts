@@ -48,7 +48,7 @@ test.group('Discovery pages', (group) => {
 
     assert.equal(status, 200)
     assert.include(html, 'cell-detail__title mono">moon_south_south_pole_r8_c4')
-    assert.equal(count(html, /<li class="candidate">/g), 4)
+    assert.equal(count(html, /<li class="candidate" /g), 4)
     assert.include(html.replace(/\s+/g, ' '), 'Features: Mean slope, Robust relief')
     assert.match(html, /<a class="cell is-selected"[^>]*data-cell="moon_south_south_pole_r8_c4"/)
   })
@@ -110,12 +110,48 @@ test.group('Discovery pages', (group) => {
     const missing = await get(`/partials/cells/moon_south_south_pole_r999_c0?${CONFIG}`)
 
     assert.equal(found.status, 200)
-    assert.equal(count(found.html, /<li class="candidate">/g), 4)
+    assert.equal(count(found.html, /<li class="candidate" /g), 4)
     assert.deepEqual(
       [...found.html.matchAll(/candidate__rank">#(\d+)/g)].map((match) => match[1]),
       ['1', '2', '3', '4']
     )
     assert.equal(count(found.html, /<li class="diff">/g), 8, 'two selected features per card')
     assert.equal(missing.status, 404)
+  })
+
+  test('home shows the Earth map with a marker per reference region', async ({ assert }) => {
+    const { html } = await get('/')
+
+    assert.match(
+      html,
+      /class="earth-map__img"\s+src="https:\/\/gibs\.earthdata\.nasa\.gov\/wms\/epsg4326\/best\/wms\.cgi\?[^"]*LAYERS=BlueMarble_NextGeneration[^"]*BBOX=-90%2C-180%2C90%2C180/
+    )
+    assert.equal(count(html, /class="region-marker"/g), 1)
+    assert.include(html, 'region-marker__label">Atacama<')
+    assert.equal(count(html, /class="graticule__meridian/g), 11)
+    assert.equal(count(html, /class="graticule__parallel/g), 5)
+  })
+
+  test('candidates come with the reference-region inset and layer switcher', async ({ assert }) => {
+    const { html } = await get(`/partials/cells/moon_south_south_pole_r8_c4?${CONFIG}`)
+
+    const markers = [...html.matchAll(/<a\s+class="map-marker"\s+href="#candidate-(\d+)"/g)]
+    assert.deepEqual(
+      markers.map((match) => match[1]),
+      ['1', '2', '3', '4']
+    )
+    for (const [, rank] of markers) {
+      assert.include(html, `id="candidate-${rank}" data-rank="${rank}"`)
+    }
+    assert.include(html, 'Earth · Atacama')
+    for (const layer of [
+      'VIIRS_NOAA20_CorrectedReflectance_TrueColor',
+      'MODIS_Terra_L3_Land_Surface_Temp_8Day_Day',
+      'ASTER_GDEM_Color_Shaded_Relief',
+    ]) {
+      assert.include(html, `LAYERS=${layer}`)
+    }
+    assert.equal(count(html, /class="chip"\s+data-layer=/g), 3)
+    assert.include(html, 'Context only: the ranking uses terrain features alone.')
   })
 })

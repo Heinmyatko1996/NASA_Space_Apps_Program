@@ -730,6 +730,233 @@ a.cell.is-selected {
   }
 }
 
+/* --- maps (plan.md Phase 5) ---
+   Markers sit on NASA imagery, not on the card surface, so they keep one
+   look in both themes: the darkest band step as fill, white numbers, and a
+   2px white ring with a shadow to separate them from any background. The
+   highlighted marker inverts (white fill, navy number). No new hue. */
+:root {
+  --map-marker: #0d366b;
+  --map-marker-ink: #ffffff;
+  --map-ring: #ffffff;
+}
+
+.map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--viz-track);
+}
+.map-caption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.map-caption[hidden] {
+  display: none;
+}
+.map-legend {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  margin-top: 6px;
+  padding: 2px 4px;
+  background: #ffffff;
+  border-radius: 4px;
+}
+
+/* full-globe Earth map */
+.earth-overview {
+  margin-top: 20px;
+}
+.earth-overview .block-desc {
+  margin-bottom: 10px;
+}
+.earth-map__frame {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+}
+.earth-map__img,
+.analog-map__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+.graticule {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.graticule__meridian,
+.graticule__parallel {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.18);
+}
+.graticule__meridian {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.graticule__parallel {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.graticule__meridian.is-primary,
+.graticule__parallel.is-primary {
+  background: rgba(255, 255, 255, 0.42);
+}
+.earth-map__markers {
+  list-style: none;
+}
+.region-marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-6px, -50%);
+}
+.region-marker__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--map-marker);
+  box-shadow:
+    0 0 0 2px var(--map-ring),
+    0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.region-marker__label {
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--card);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+/* reference-region inset */
+.analog-map {
+  margin-top: 16px;
+}
+.analog-map__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.analog-map__region {
+  font-size: 13px;
+  font-weight: 600;
+}
+.analog-map__frame {
+  position: relative;
+  max-width: 480px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+.analog-map__outline {
+  position: absolute;
+  border: 1.5px dashed rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.marker-group {
+  position: absolute;
+  display: flex;
+  gap: 4px;
+  /* the best-ranked marker is centered on the group's point */
+  transform: translate(-11px, -50%);
+}
+/* near the right edge the pill grows leftwards, best rank still on the point */
+.marker-group--left {
+  flex-direction: row-reverse;
+  transform: translate(calc(-100% + 11px), -50%);
+}
+.marker-group:hover,
+.marker-group:focus-within {
+  z-index: 300 !important;
+}
+.map-marker {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--map-marker-ink);
+  text-decoration: none;
+  background: var(--map-marker);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--map-ring),
+    0 1px 4px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s ease;
+}
+/* hit target larger than the mark, without overlapping a group neighbor */
+.map-marker::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+}
+.map-marker:hover,
+.map-marker:focus-visible {
+  transform: scale(1.15);
+}
+.map-marker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.map-marker.is-active {
+  color: var(--map-marker);
+  background: var(--map-marker-ink);
+  box-shadow:
+    0 0 0 2px var(--map-marker),
+    0 1px 6px rgba(0, 0, 0, 0.7);
+  transform: scale(1.2);
+}
+.marker-group:has(.is-active) {
+  z-index: 301 !important;
+}
+.layer-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.layer-switch .chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.candidate.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.candidate {
+  scroll-margin: 16px;
+}
+
 /* --- responsive --- */
 @media (max-width: 1180px) {
   .run__body {

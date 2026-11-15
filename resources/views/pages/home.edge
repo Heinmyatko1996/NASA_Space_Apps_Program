@@ -27,6 +27,16 @@
           @include('partials/explore_card')
         @end
       </div>
+      <section class="earth-overview" aria-labelledby="earth-title">
+        <h3 id="earth-title" class="block-title">Earth reference regions</h3>
+        <p class="block-desc">
+          Earth candidates come from these regions. Each result shows the selected region up close, with its ranked cells marked.
+        </p>
+        @!component('components/earth_map', {
+          map: earthMap,
+          alt: 'NASA Blue Marble image of the whole Earth with the Earth reference regions marked: ' + earthMap.markers.map((marker) => marker.label).join(', ')
+        })
+      </section>
     </section>
 
     <div class="workspace">

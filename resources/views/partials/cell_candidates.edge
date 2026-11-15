@@ -1,8 +1,10 @@
 {{--
   Ranked Earth candidates for one target cell. Expects `cell` from
-  presentCellCandidates(). Distances are "lower = closer", never percentages.
+  presentCellCandidates() plus `cell.map` (the reference-region inset, or
+  null). Distances are "lower = closer", never percentages. Selecting a card
+  or a map marker highlights both (`analogMap` in resources/js/app.js).
 --}}
-<article class="cell-detail">
+<article class="cell-detail" x-data="analogMap" @click="pick($event)">
   <header class="cell-detail__header">
     <p class="tag">Target cell</p>
     <h3 class="cell-detail__title mono">{{ cell.target.cellId }}</h3>
@@ -17,6 +19,10 @@
     </dl>
   </header>
 
+  @if(cell.map)
+    @!component('partials/analog_map', { map: cell.map })
+  @end
+
   <p class="cell-detail__hint">
     Bars show each selected feature's difference, target minus Earth, in Earth-reference robust units (scale ±{{ cell.scale }}).
     <span class="key key--higher">target higher</span>
@@ -26,7 +32,7 @@
 
   <ol class="candidates">
     @each(candidate in cell.candidates)
-      <li class="candidate">
+      <li class="candidate" id="candidate-{{ candidate.rank }}" data-rank="{{ candidate.rank }}">
         <div class="candidate__head">
           <span class="candidate__rank">#{{ candidate.rank }}</span>
           <span class="candidate__id mono">{{ candidate.cellId }}</span>

@@ -234,6 +234,9 @@ export default class DiscoveryService {
   /** Configuration key → the INSERT that fills discovery_cache for it. */
   #rankings = new Map<string, { insert: Promise<void>; done: boolean }>()
 
+  /** `planet|region` → bounding box; the data cannot change while running. */
+  #extents = new Map<string, Promise<RegionExtent | null>>()
+
   constructor(
     private db: DuckDbService,
     private logger: Logger,
@@ -386,8 +389,21 @@ export default class DiscoveryService {
     return row ? toCandidateDetails(row, config) : null
   }
 
-  /** Bounding box of a region's cells, for map insets. */
-  async regionExtent(planet: string, region: string): Promise<RegionExtent | null> {
+  /** Bounding box of a region's cells, for map insets. Cached per region. */
+  regionExtent(planet: string, region: string): Promise<RegionExtent | null> {
+    const key = `${planet}|${region}`
+    let extent = this.#extents.get(key)
+    if (!extent) {
+      extent = this.#loadRegionExtent(planet, region).catch((error) => {
+        this.#extents.delete(key)
+        throw error
+      })
+      this.#extents.set(key, extent)
+    }
+    return extent
+  }
+
+  async #loadRegionExtent(planet: string, region: string): Promise<RegionExtent | null> {
     const row = await this.#first(
       `SELECT * REPLACE (cell_count::INTEGER AS cell_count) FROM region_extent($planet, $region)`,
       { planet, region }
