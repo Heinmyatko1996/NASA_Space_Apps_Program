@@ -17,6 +17,9 @@ venv/
 # Environment variables
 .env
 
+# initial ideations
+dataset_to_download.md
+
 # Raw and processed geospatial data
 data/raw/
 data/processed/
