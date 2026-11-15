@@ -47,3 +47,6 @@ yarn-error.log
 /.python-version
 .venv/
 __pycache__/
+
+# Vercel project link and prebuilt output (deploy/vercel/build.mjs)
+.vercel
