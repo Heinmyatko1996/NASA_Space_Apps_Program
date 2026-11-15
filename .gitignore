@@ -24,3 +24,26 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+
+# TerraTwin data: only the three processed Parquet files are committed.
+# Raw downloads, AOI clips, intermediate rasters and DuckDB files stay local.
+/data/*
+!/data/processed/
+/data/processed/*
+!/data/processed/parquet/
+/data/processed/parquet/*
+!/data/processed/parquet/*_5km_500m.parquet
+
+# Hein's pipeline and analysis files live on main, not in the website repo
+/docs/findings/
+/queries/catalog/
+/queries/results/
+/notebooks/
+/scripts/
+/dataset_to_download.md
+/main.py
+/pyproject.toml
+/uv.lock
+/.python-version
+.venv/
+__pycache__/

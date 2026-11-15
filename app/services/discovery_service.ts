@@ -177,7 +177,7 @@ export interface BaselineExample {
   featured: CellCandidates | null
 }
 
-/** Shape from docs/api/candidate_details_reponse.md (Hein's contract). */
+/** Shape from docs/api/candidate_details_response.md (Hein's contract). */
 export interface CandidateDetails {
   target: CellDetail
   candidate: CellDetail
@@ -370,7 +370,7 @@ export default class DiscoveryService {
   /**
    * Full comparison of one target cell and its Earth candidate at `rank`,
    * from Hein's get_candidate_details, in the JSON shape of
-   * docs/api/candidate_details_reponse.md. Null when there is no such
+   * docs/api/candidate_details_response.md. Null when there is no such
    * candidate.
    */
   async candidateDetails(

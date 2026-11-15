@@ -220,7 +220,7 @@ planetary-analog-finder/
 - [ ] **2.7 Build & Dev-Server Config (`adonisrc.ts`):**
   - Replace the `database/seeds/*.csv` `metaFiles` entry with `queries/**/*.sql` and `data/processed/parquet/*.parquet`, both with `reloadServer: true`. Keep `database/**/*.sql`.
 - [ ] **2.8 Verify from the Command Line:**
-  - From the repo root, in the DuckDB CLI: `.read queries/discovery/run_discovery.sql`, then `SELECT * FROM run_discovery('Moon', 'South_Pole', 'Atacama', ['mean_slope_deg', 'robust_relief_m'], 10) WHERE target_cell_id = 'moon_south_south_pole_r8_c4' ORDER BY rank;`. Rank 1 should be `earth_atacama_atacama_r-7_c-3` with distance ≈ 4.497, as in the example in `docs/api/candidate_details_reponse.md`.
+  - From the repo root, in the DuckDB CLI: `.read queries/discovery/run_discovery.sql`, then `SELECT * FROM run_discovery('Moon', 'South_Pole', 'Atacama', ['mean_slope_deg', 'robust_relief_m'], 10) WHERE target_cell_id = 'moon_south_south_pole_r8_c4' ORDER BY rank;`. Rank 1 should be `earth_atacama_atacama_r-7_c-3` with distance ≈ 4.497, as in the example in `docs/api/candidate_details_response.md`.
   - `npm run dev` logs `DuckDB ready in memory`. Temporarily rename one Parquet file and confirm boot stops with the message from `checks.sql`.
 
 ---
@@ -241,7 +241,7 @@ Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run 
   - `baseline(world, region)`: Hein's `get_discovery_summary`, `get_candidate_diversity`, and `get_ranked_candidates` for `featured_target_cell`, for the Explore cards.
   - `run(config)`: summary, diversity, and the target cell grid for a custom configuration, plus `bestCellId` and timing.
   - `cellCandidates(config, cellId)`: ranked Earth candidates for one target cell, with coordinates and original terrain values.
-  - `candidateDetails(config, cellId, rank)`: Hein's `get_candidate_details`, mapped to the JSON shape in `docs/api/candidate_details_reponse.md`.
+  - `candidateDetails(config, cellId, rank)`: Hein's `get_candidate_details`, mapped to the JSON shape in `docs/api/candidate_details_response.md`.
   - `regionExtent(planet, region)`: bounding box for map insets.
   - Every value is a bound `$name` parameter. `featureIds` is bound with `listValue()` and the explicit type `LIST(VARCHAR)`, because an empty list can't infer its type and fails otherwise. `DuckDbService.all/first/run` gained an optional `types` argument for this. JS integers already bind as `INTEGER`.
   - Counts and ranks are cast to `INTEGER` in SQL (`SELECT * REPLACE (rank::INTEGER AS rank) …`).
