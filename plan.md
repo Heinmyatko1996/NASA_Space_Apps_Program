@@ -325,17 +325,17 @@ Invalid settings return a 422 notice listing the problems, and an unknown cell r
 ### Phase 6: Candidate Detail & Polish (Hours 30–40)
 **Objective:** Give judges the scientific detail behind each match, from `get_candidate_details`.
 
-- [ ] **6.1 Candidate Detail Modal (`GET /partials/candidates/:cellId/:rank?…config`):**
+- [x] **6.1 Candidate Detail Modal (`GET /partials/candidates/:cellId/:rank?…config`): done as a native `<dialog>` opened by Alpine with `showModal()` (focus stays inside, Esc and a backdrop click close it, focus returns to the "Inspect match" link). While open, the URL carries `inspect=N`; `GET /?…&cell=…&inspect=N` renders it open on the server, so the link is shareable and works without JavaScript (`form method="dialog"` closes it). The target's location is a mini grid of its region with the target ringed; the Earth cell is on the reference-region inset. Citations follow Hein's dataset plan on `main` (SRTMGL1.003; LOLA `LDEM_80S_80MPP_ADJ`; MOLA MEGDR 128 px/° `megt44n000hb`) and are labeled as such. The Parquet files only record the common 500 m grid, so the products still need Hein's confirmation.**
   - "Inspect match" on any candidate card swaps `partials/candidate_detail.edge` into an Alpine-controlled modal (`x-show`, closes on `Esc`/backdrop).
   - Side-by-side table of the target and Earth cells' original values with units: mean slope (°), robust relief (m), slope variability (°). Mean elevation is shown with the note "not comparable across bodies: different vertical reference systems".
   - The signed feature-difference bars from 4.5, the distance, and the rank.
   - Data coverage for both cells as percentages (`valid_pixel_fraction` 1.0 → 100%).
   - Both locations: the Earth cell on the Atacama inset and the target cell highlighted on the cell grid, each with coordinates in decimal degrees.
   - Dataset citations (Earth SRTM, Moon LRO LOLA, Mars MGS MOLA); confirm the exact products with Hein.
-- [ ] **6.2 Field-Test Notes Based on Terrain:**
+- [x] **6.2 Field-Test Notes Based on Terrain: done in the detail dialog. Every selected feature gets its test idea, ordered by |difference| with the closest flagged, plus the caveat below.**
   - From the smallest absolute feature differences, suggest terrain-relevant tests, e.g., closest on mean slope → lander touchdown and slope traverse trials; closest on slope variability → rover suspension and obstacle trials; closest on relief → EVA navigation across similar elevation spread.
   - Always add: "Based on terrain shape only. Gravity, regolith, temperature, and radiation are not compared."
-- [ ] **6.3 UI/UX & Performance Audit:**
+- [x] **6.3 UI/UX & Performance Audit: done. The results header reads e.g. `run_discovery: 304 ms · 324 target cells × 365 Earth cells` (or `cached · 21 ms`). Measured with a PerformanceObserver in Chromium: page load, a run from the empty state, a cell swap, and opening the detail all have 0 layout shift. The dialog shows a skeleton while loading and is top-anchored, so it only grows downward; map frames already reserve their aspect ratio. No `%` appears next to a distance (covered by tests).**
   - Show the query time from 3.4 in the UI header (e.g., `run_discovery: 18 ms · 324 target cells × 365 Earth cells`).
   - Ensure zero layout shift during partial swaps using fixed-size skeleton loaders driven by the `ui.loading` store.
   - Search the views for `%` next to any distance and remove it.

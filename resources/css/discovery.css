@@ -957,7 +957,261 @@ a.cell.is-selected {
   scroll-margin: 16px;
 }
 
+/* --- candidate detail dialog (plan.md 6.1, 6.2) --- */
+.candidate__inspect {
+  margin-left: 6px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.candidate__inspect:hover {
+  text-decoration: underline;
+}
+
+.detail-dialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  /* top-anchored, not centered: when the content replaces the skeleton the
+     dialog only grows downward, so nothing on screen moves */
+  margin: 16px auto auto;
+  padding: 0;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+.detail-dialog:not([open]) {
+  display: none;
+}
+.detail-dialog::backdrop {
+  background: rgba(5, 7, 13, 0.6);
+}
+.detail-dialog__body {
+  padding: 22px;
+}
+
+.detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.detail__title {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.detail__title:focus {
+  outline: none;
+}
+.detail__vs {
+  font-weight: 400;
+  color: var(--muted);
+}
+.detail__distance {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.detail__distance .readout {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.detail__close .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail__places {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.place {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.place__title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.place__id {
+  margin-top: 2px;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.place__meta {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.place__figure {
+  margin-top: 10px;
+}
+.place__figure .analog-map__frame {
+  max-width: 260px;
+}
+
+/* target region at a glance: every cell, the target ringed */
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: 1px;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: var(--cols) / var(--rows);
+}
+.mini-grid__cell {
+  background: var(--viz-band-3);
+  border-radius: 1px;
+}
+.mini-grid__cell.is-excluded {
+  background: var(--viz-track);
+}
+.mini-grid__cell.is-target {
+  position: relative;
+  z-index: 1;
+  background: var(--ink);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.detail__section {
+  margin-top: 20px;
+}
+.detail__table {
+  margin-top: 8px;
+}
+.detail__table tbody th {
+  font-weight: 500;
+  text-align: left;
+}
+.detail__table tr.is-unselected td {
+  color: var(--muted);
+}
+.detail__unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.field-tests {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.field-test {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.field-test.is-closest {
+  border-color: var(--accent);
+}
+.field-test__title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.field-test__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+.field-test__text {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.detail__caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.detail__caveat svg {
+  flex: none;
+  margin-top: 2px;
+}
+.detail__footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  font-size: 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+.detail__sources {
+  margin: 4px 0 8px 18px;
+}
+.detail__link {
+  color: var(--accent);
+}
+
+/* --- skeletons (plan.md 6.3): fixed-size placeholders while a swap loads --- */
+.skeleton {
+  display: block;
+  background: var(--viz-track);
+  border-radius: var(--r);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+  }
+}
+@keyframes skeleton-pulse {
+  to {
+    opacity: 0.5;
+  }
+}
+.skeleton--title {
+  width: 60%;
+  height: 24px;
+}
+.skeleton--line {
+  width: 30%;
+  height: 16px;
+  margin-top: 10px;
+}
+.skeleton--block {
+  height: 320px;
+}
+.skeleton--table {
+  height: 160px;
+  margin-top: 18px;
+}
+.detail-skeleton__places {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
 /* --- responsive --- */
+@media (max-width: 720px) {
+  .detail__places,
+  .detail-skeleton__places {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .detail-dialog__body {
+    padding: 16px;
+  }
+}
 @media (max-width: 1180px) {
   .run__body {
     grid-template-columns: minmax(0, 1fr);

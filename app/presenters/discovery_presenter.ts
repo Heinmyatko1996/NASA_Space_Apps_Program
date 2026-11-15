@@ -2,6 +2,7 @@ import {
   DEFAULT_TOP_N,
   MAX_TOP_N,
   type BaselineExample,
+  type CandidateDetails,
   type Catalog,
   type CellCandidates,
   type DiscoveryConfig,
@@ -72,6 +73,11 @@ export function formatCoordinates(point: GeoPoint): string {
   const lat = `${Math.abs(point.latitude).toFixed(2)}° ${point.latitude < 0 ? 'S' : 'N'}`
   const lon = `${Math.abs(point.longitude).toFixed(2)}° ${point.longitude < 0 ? 'W' : 'E'}`
   return `${lat}, ${lon}`
+}
+
+/** Signed decimal degrees, e.g. "-23.7917°, -69.8742°" (lat, lon). */
+export function formatDecimalDegrees(point: GeoPoint): string {
+  return `${point.latitude.toFixed(4)}°, ${point.longitude.toFixed(4)}°`
 }
 
 function formatTerrain(featureId: string, terrain: TerrainValues): string {
@@ -267,8 +273,27 @@ function presentGrid(run: DiscoveryRun) {
   }
 }
 
+/**
+ * Query readout for the results header (plan.md 6.3), e.g.
+ * "run_discovery: 283 ms · 324 target cells × 365 Earth cells".
+ */
+function timingLine(run: DiscoveryRun, references: ReferenceRegion[]) {
+  const { timing } = run
+  const earthCells = references.find(
+    (reference) => reference.region === run.configuration.reference
+  )?.eligibleCellCount
+  const query = timing.rankingCached
+    ? `run_discovery: cached · ${timing.totalMs} ms`
+    : `run_discovery: ${timing.rankingMs} ms`
+  const cells =
+    earthCells === undefined
+      ? `${run.summary.targetCellCount} target cells`
+      : `${run.summary.targetCellCount} target cells × ${earthCells} Earth cells`
+  return `${query} · ${cells}`
+}
+
 export function presentRun(run: DiscoveryRun, catalog: Catalog, references: ReferenceRegion[]) {
-  const { summary, diversity, timing } = run
+  const { summary, diversity } = run
   return {
     query: configQuery(run.configuration),
     configuration: configurationLine(run.configuration, catalog, references),
@@ -293,17 +318,63 @@ export function presentRun(run: DiscoveryRun, catalog: Catalog, references: Refe
           }
         : null,
     },
-    timing: timing.rankingCached
-      ? `Ranking reused from cache · ${timing.totalMs} ms`
-      : `Ranked in ${timing.rankingMs} ms · ${timing.totalMs} ms total`,
+    timing: timingLine(run, references),
     grid: presentGrid(run),
   }
 }
 
+const zOf = (differences: FeatureDifferences, id: string) => differences[FEATURES[id].z]
+
+/** Bar scale: ±1, or the largest |difference| shown rounded up. */
+function barScale(differences: FeatureDifferences[], selected: string[]) {
+  const largest = Math.max(
+    0,
+    ...differences.flatMap((entry) => selected.map((id) => Math.abs(zOf(entry, id) ?? 0)))
+  )
+  return largest <= 1 ? 1 : Math.ceil(largest)
+}
+
 /**
- * Candidate cards for one target cell. Each selected feature gets a bar
- * centered on zero: right when the target is higher than the Earth cell,
- * left when lower, with length relative to the largest difference shown.
+ * One bar per selected feature, centered on zero: right when the target is
+ * higher than the Earth cell, left when lower, length relative to `scale`.
+ */
+function featureBars(
+  differences: FeatureDifferences,
+  selected: string[],
+  target: TerrainValues,
+  earth: TerrainValues,
+  scale: number,
+  catalog: Catalog
+) {
+  return selected.map((id) => {
+    const z = zOf(differences, id) ?? 0
+    const direction = Math.abs(z) < 0.005 ? 'same' : z > 0 ? 'higher' : 'lower'
+    return {
+      label: featureLabel(catalog, id),
+      z: formatSigned(z),
+      direction,
+      widthPct: Math.round(Math.min(Math.abs(z) / scale, 1) * 1000) / 10,
+      detail:
+        direction === 'same'
+          ? `about the same (target ${formatTerrain(id, target)}, Earth ${formatTerrain(id, earth)})`
+          : `target ${direction} (${formatTerrain(id, target)} vs ${formatTerrain(id, earth)})`,
+    }
+  })
+}
+
+/** Full-page URL that opens one candidate's detail (works without JS). */
+function inspectHref(config: DiscoveryConfig, cellId: string, rank: number) {
+  return `${cellHref(config, cellId)}&inspect=${rank}`
+}
+
+/** Partial URL the script swaps into the detail dialog. */
+function detailUrl(config: DiscoveryConfig, cellId: string, rank: number) {
+  return `/partials/candidates/${encodeURIComponent(cellId)}/${rank}?${configQuery(config)}`
+}
+
+/**
+ * Candidate cards for one target cell, with feature-difference bars on a
+ * scale shared by every card.
  */
 export function presentCellCandidates(
   result: CellCandidates,
@@ -311,15 +382,10 @@ export function presentCellCandidates(
   catalog: Catalog
 ) {
   const selected = config.features.filter((id) => FEATURES[id])
-  const zOf = (differences: FeatureDifferences, id: string) => differences[FEATURES[id].z]
-
-  const largest = Math.max(
-    0,
-    ...result.candidates.flatMap((candidate) =>
-      selected.map((id) => Math.abs(zOf(candidate.featureDifferences, id) ?? 0))
-    )
+  const scale = barScale(
+    result.candidates.map((candidate) => candidate.featureDifferences),
+    selected
   )
-  const scale = largest <= 1 ? 1 : Math.ceil(largest)
 
   const terrainRows = (terrain: TerrainValues) =>
     catalog.features
@@ -344,21 +410,137 @@ export function presentCellCandidates(
       region: candidate.region,
       coordinates: formatCoordinates(candidate.location),
       distance: formatDistance(candidate.distance),
-      bars: selected.map((id) => {
-        const z = zOf(candidate.featureDifferences, id) ?? 0
-        const direction = Math.abs(z) < 0.005 ? 'same' : z > 0 ? 'higher' : 'lower'
-        return {
-          label: featureLabel(catalog, id),
-          z: formatSigned(z),
-          direction,
-          widthPct: Math.round(Math.min(Math.abs(z) / scale, 1) * 1000) / 10,
-          detail:
-            direction === 'same'
-              ? `about the same (target ${formatTerrain(id, result.target.terrain)}, Earth ${formatTerrain(id, candidate.terrain)})`
-              : `target ${direction} (${formatTerrain(id, result.target.terrain)} vs ${formatTerrain(id, candidate.terrain)})`,
-        }
-      }),
+      inspectHref: inspectHref(config, result.target.cellId, candidate.rank),
+      detailUrl: detailUrl(config, result.target.cellId, candidate.rank),
+      bars: featureBars(
+        candidate.featureDifferences,
+        selected,
+        result.target.terrain,
+        candidate.terrain,
+        scale,
+        catalog
+      ),
     })),
+  }
+}
+
+/**
+ * Field-test ideas for each terrain feature (plan.md 6.2), used in order of
+ * how closely the Earth cell matches the target on that feature.
+ */
+const FIELD_TESTS: Record<string, { title: string; text: string }> = {
+  mean_slope_deg: {
+    title: 'Lander touchdown and slope traverse trials',
+    text: 'Average steepness is similar, so touchdown stability and climbing or descending the same grades can be rehearsed here.',
+  },
+  slope_stddev_deg: {
+    title: 'Rover suspension and obstacle trials',
+    text: 'Slope variability is similar, so the terrain is about as uneven: a fit for suspension, wheel, and obstacle-crossing tests.',
+  },
+  robust_relief_m: {
+    title: 'EVA navigation trials',
+    text: 'Relief is similar, so walking and navigating across a comparable elevation spread can be practiced here.',
+  },
+}
+
+export const FIELD_TEST_CAVEAT =
+  'Based on terrain shape only. Gravity, regolith, temperature, and radiation are not compared.'
+
+/** Selected features ordered by |difference|, closest first, with tests. */
+function fieldTests(differences: FeatureDifferences, selected: string[], catalog: Catalog) {
+  return selected
+    .filter((id) => FIELD_TESTS[id])
+    .map((id) => ({ id, z: Math.abs(zOf(differences, id) ?? 0) }))
+    .sort((a, b) => a.z - b.z)
+    .map(({ id, z }, index) => ({
+      feature: featureLabel(catalog, id),
+      difference: z.toFixed(2),
+      closest: index === 0,
+      ...FIELD_TESTS[id],
+    }))
+}
+
+const ELEVATION_NOTE = 'not comparable across bodies: different vertical reference systems'
+
+/**
+ * Source elevation models as listed in Hein's dataset plan (main:
+ * dataset_to_download.md). The processed files only record the common 500 m
+ * grid, so plan.md 6.1 asks to confirm the exact products with Hein.
+ */
+const DATASET_CITATIONS: Record<string, string> = {
+  Earth: 'Earth: NASA SRTM Global 1 arc-second, version 3 (SRTMGL1.003, about 30 m)',
+  Moon: 'Moon: LRO LOLA polar DEM LDEM_80S_80MPP_ADJ (80 m/pixel, 80°S–90°S)',
+  Mars: 'Mars: MGS MOLA MEGDR topography, 128 pixels/degree (tile megt44n000hb, about 463 m)',
+}
+
+function coverage(cell: CandidateDetails['target']) {
+  return {
+    dem: formatPct(cell.dataQuality.validPixelFraction * 100),
+    slope: formatPct(cell.dataQuality.validSlopePixelFraction * 100),
+  }
+}
+
+/**
+ * The detail view of one candidate (plan.md 6.1, 6.2): side-by-side terrain
+ * values with units, difference bars, data coverage, both locations, field
+ * test ideas, and dataset citations.
+ */
+export function presentCandidateDetail(
+  details: CandidateDetails,
+  config: DiscoveryConfig,
+  catalog: Catalog,
+  references: ReferenceRegion[]
+) {
+  const { target, candidate, comparison } = details
+  const selected = config.features.filter((id) => FEATURES[id])
+  const scale = barScale([comparison.featureDifferences], selected)
+
+  const terrainRows = catalog.features
+    .filter((feature) => FEATURES[feature.id])
+    .map((feature) => ({
+      label: feature.label,
+      unit: feature.unit,
+      target: formatTerrain(feature.id, target.terrain),
+      earth: formatTerrain(feature.id, candidate.terrain),
+      selected: config.features.includes(feature.id),
+    }))
+
+  const planets = [target.planet, 'Earth']
+  return {
+    rank: comparison.rank,
+    distance: formatDistance(comparison.distance),
+    target: {
+      cellId: target.cellId,
+      title: `${worldLabel(catalog, target.planet)} · ${regionLabel(catalog, target.planet, target.region)}`,
+      coordinates: formatDecimalDegrees(target.location),
+      coverage: coverage(target),
+    },
+    earth: {
+      cellId: candidate.cellId,
+      title: `Earth · ${referenceLabel(references, candidate.region)}`,
+      region: referenceLabel(references, candidate.region),
+      coordinates: formatDecimalDegrees(candidate.location),
+      coverage: coverage(candidate),
+    },
+    terrainRows,
+    elevation: {
+      target: `${target.terrain.meanElevationM.toFixed(0)} m`,
+      earth: `${candidate.terrain.meanElevationM.toFixed(0)} m`,
+      note: ELEVATION_NOTE,
+    },
+    scale,
+    bars: featureBars(
+      comparison.featureDifferences,
+      selected,
+      target.terrain,
+      candidate.terrain,
+      scale,
+      catalog
+    ),
+    fieldTests: fieldTests(comparison.featureDifferences, selected, catalog),
+    caveat: FIELD_TEST_CAVEAT,
+    citations: planets.map((planet) => DATASET_CITATIONS[planet]).filter(Boolean),
+    inspectHref: inspectHref(config, target.cellId, comparison.rank),
   }
 }
 

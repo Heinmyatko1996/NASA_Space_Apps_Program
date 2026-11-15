@@ -8,18 +8,21 @@ export type ScannedRoutes = {
     'partials.regions': { paramsTuple?: []; params?: {} }
     'partials.discover': { paramsTuple?: []; params?: {} }
     'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
   }
   GET: {
     'home': { paramsTuple?: []; params?: {} }
     'partials.regions': { paramsTuple?: []; params?: {} }
     'partials.discover': { paramsTuple?: []; params?: {} }
     'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
     'partials.regions': { paramsTuple?: []; params?: {} }
     'partials.discover': { paramsTuple?: []; params?: {} }
     'partials.cell': { paramsTuple: [ParamValue]; params: {'cellId': ParamValue} }
+    'partials.candidate': { paramsTuple: [ParamValue,ParamValue]; params: {'cellId': ParamValue,'rank': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

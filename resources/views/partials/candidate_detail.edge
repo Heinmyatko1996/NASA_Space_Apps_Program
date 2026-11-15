@@ -1,0 +1,184 @@
+{{--
+  Detail of one ranked Earth candidate (plan.md 6.1, 6.2), shown in the
+  candidate dialog. Expects `detail` from presentCandidateDetail() plus
+  `detail.map` (the reference-region inset with this candidate's marker, or
+  null) and `detail.grid` (the target region's cells, target flagged).
+  Distances are "lower = closer", never percentages; coverage is a percentage.
+--}}
+<article class="detail">
+  <header class="detail__header">
+    <div class="detail__heading">
+      <p class="tag">Match #{{ detail.rank }}</p>
+      <h2 id="detail-title" class="detail__title" tabindex="-1" data-autofocus>
+        {{ detail.target.title }}
+        <span class="detail__vs">and</span>
+        {{ detail.earth.title }}
+      </h2>
+      <p class="detail__distance">
+        <span class="readout">{{ detail.distance }}</span>
+        distance · lower = closer
+      </p>
+    </div>
+    <form method="dialog" class="detail__close">
+      <button type="submit" class="chip" aria-label="Close match details">
+        @svg('lucide:x', { width: 14, height: 14 })
+        <span>Close</span>
+      </button>
+    </form>
+  </header>
+
+  <div class="detail__places">
+    <section class="place" aria-labelledby="place-target">
+      <h3 id="place-target" class="place__title">Target · {{ detail.target.title }}</h3>
+      <p class="place__id mono">{{ detail.target.cellId }}</p>
+      <p class="place__meta readout">{{ detail.target.coordinates }}</p>
+      <p class="place__meta">
+        Data coverage: DEM {{ detail.target.coverage.dem }} · slope {{ detail.target.coverage.slope }}
+      </p>
+      <figure class="place__figure">
+        <div
+          class="mini-grid"
+          style="--cols: {{ detail.grid.columns }}; --rows: {{ detail.grid.rows }}"
+          role="img"
+          aria-label="Target region cell grid with this target cell highlighted"
+        >
+          @each(cell in detail.grid.cells)
+            <span class="mini-grid__cell{{ cell.eligible ? '' : ' is-excluded' }}{{ cell.target ? ' is-target' : '' }}" style="grid-row: {{ cell.row }}; grid-column: {{ cell.col }}"></span>
+          @end
+        </div>
+        <figcaption class="map-caption">Target region, north up. The ringed cell is this target; faint cells are excluded (&lt; 95% coverage).</figcaption>
+      </figure>
+    </section>
+
+    <section class="place" aria-labelledby="place-earth">
+      <h3 id="place-earth" class="place__title">Earth candidate · {{ detail.earth.region }}</h3>
+      <p class="place__id mono">{{ detail.earth.cellId }}</p>
+      <p class="place__meta readout">{{ detail.earth.coordinates }}</p>
+      <p class="place__meta">
+        Data coverage: DEM {{ detail.earth.coverage.dem }} · slope {{ detail.earth.coverage.slope }}
+      </p>
+      @if(detail.map)
+        <figure class="place__figure">
+          <div class="analog-map__frame">
+            <span class="map-placeholder" aria-hidden="true">Loading NASA imagery…</span>
+            <img
+              class="analog-map__img"
+              src="{{ detail.map.layers[0].src }}"
+              width="{{ detail.map.size }}"
+              height="{{ detail.map.size }}"
+              alt="NASA satellite image of {{ detail.earth.title }} with this Earth candidate cell marked"
+              loading="lazy"
+              decoding="async"
+            />
+            <span
+              class="analog-map__outline"
+              aria-hidden="true"
+              style="left: {{ detail.map.outline.leftPct }}%; top: {{ detail.map.outline.topPct }}%; width: {{ detail.map.outline.widthPct }}%; height: {{ detail.map.outline.heightPct }}%"
+            ></span>
+            @each(group in detail.map.markers)
+              <span class="marker-group marker-group--{{ group.direction }}" style="left: {{ group.leftPct }}%; top: {{ group.topPct }}%">
+                @each(member in group.members)
+                  <span class="map-marker is-active" aria-hidden="true">{{ member.rank }}</span>
+                @end
+              </span>
+            @end
+          </div>
+          <figcaption class="map-caption">{{ detail.map.layers[0].caption }}</figcaption>
+        </figure>
+      @end
+    </section>
+  </div>
+
+  <section class="detail__section" aria-labelledby="detail-values">
+    <h3 id="detail-values" class="block-title">Terrain values</h3>
+    <table class="table detail__table">
+      <thead>
+        <tr>
+          <th scope="col">Feature</th>
+          <th scope="col" class="num">Target</th>
+          <th scope="col" class="num">Earth</th>
+        </tr>
+      </thead>
+      <tbody>
+        @each(row in detail.terrainRows)
+          <tr class="{{ row.selected ? '' : 'is-unselected' }}">
+            <th scope="row">
+              {{ row.label }}
+              <span class="detail__unit">({{ row.unit }})</span>
+              @if(!row.selected)
+                <span class="detail__unit">· not compared in this run</span>
+              @end
+            </th>
+            <td class="num readout">{{ row.target }}</td>
+            <td class="num readout">{{ row.earth }}</td>
+          </tr>
+        @end
+        <tr class="is-unselected">
+          <th scope="row">
+            Mean elevation
+            <span class="detail__unit">(m) · {{ detail.elevation.note }}</span>
+          </th>
+          <td class="num readout">{{ detail.elevation.target }}</td>
+          <td class="num readout">{{ detail.elevation.earth }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="detail__section" aria-labelledby="detail-diffs">
+    <h3 id="detail-diffs" class="block-title">Differences, target minus Earth</h3>
+    <p class="cell-detail__hint">
+      In Earth-reference robust units (scale ±{{ detail.scale }}).
+      <span class="key key--higher">target higher</span>
+      <span class="key key--lower">target lower</span>
+      Longer bars add more to the distance.
+    </p>
+    <ul class="diffs">
+      @each(bar in detail.bars)
+        <li class="diff">
+          <span class="diff__label">{{ bar.label }}</span>
+          <span class="diff__track" aria-hidden="true">
+            <span class="diff__bar diff__bar--{{ bar.direction }}" style="--w: {{ bar.widthPct }}%"></span>
+          </span>
+          <span class="diff__value readout">{{ bar.z }}</span>
+          <span class="diff__detail">{{ bar.detail }}</span>
+        </li>
+      @end
+    </ul>
+  </section>
+
+  <section class="detail__section" aria-labelledby="detail-tests">
+    <h3 id="detail-tests" class="block-title">Field-test ideas</h3>
+    <ol class="field-tests">
+      @each(test in detail.fieldTests)
+        <li class="field-test{{ test.closest ? ' is-closest' : '' }}">
+          <p class="field-test__title">
+            {{ test.title }}
+            @if(test.closest)
+              <span class="field-test__badge">closest feature</span>
+            @end
+          </p>
+          <p class="field-test__text">
+            {{ test.feature }} differs by {{ test.difference }} robust units. {{ test.text }}
+          </p>
+        </li>
+      @end
+    </ol>
+    <p class="detail__caveat">
+      @svg('lucide:info', { width: 14, height: 14 })
+      <span>{{ detail.caveat }}</span>
+    </p>
+  </section>
+
+  <footer class="detail__footer">
+    <p class="detail__sources-title">Source elevation data, as listed in the TerraTwin dataset plan, resampled to a common 500 m grid:</p>
+    <ul class="detail__sources">
+      @each(citation in detail.citations)
+        <li>{{ citation }}</li>
+      @end
+    </ul>
+    <p>
+      <a class="detail__link" href="{{ detail.inspectHref }}">Link to this match</a>
+    </p>
+  </footer>
+</article>

@@ -178,5 +178,40 @@
         @end
       </section>
     </div>
+
+    {{--
+      Candidate detail (plan.md 6.1). "Inspect match" swaps the detail
+      partial in and opens this as a modal dialog (Esc or a backdrop click
+      closes it). A shared `inspect=` link renders it open on the server,
+      which also works without JavaScript; `form method="dialog"` closes it.
+    --}}
+    <dialog
+      id="candidate-dialog"
+      class="detail-dialog"
+      aria-labelledby="detail-title"
+      x-data="candidateDialog"
+      @inspect-candidate.window="open($event.detail)"
+      @click="backdrop($event)"
+      @close="closed()"
+      {{ detail ? 'open' : '' }}
+    >
+      <div class="detail-dialog__body" x-ref="body">
+        @if(detail)
+          @include('partials/candidate_detail')
+        @end
+      </div>
+      <template x-ref="skeleton">
+        <div class="detail-skeleton" aria-hidden="true">
+          <span class="skeleton skeleton--title"></span>
+          <span class="skeleton skeleton--line"></span>
+          <div class="detail-skeleton__places">
+            <span class="skeleton skeleton--block"></span>
+            <span class="skeleton skeleton--block"></span>
+          </div>
+          <span class="skeleton skeleton--table"></span>
+        </div>
+        <p class="sr-only" role="status">Loading match details…</p>
+      </template>
+    </dialog>
   </main>
 @end

@@ -1,12 +1,16 @@
 import { test } from '@japa/runner'
 import {
+  FIELD_TEST_CAVEAT,
   configQuery,
   formatCoordinates,
+  formatDecimalDegrees,
   formatDistance,
+  presentCandidateDetail,
   presentCellCandidates,
   presentRun,
 } from '#presenters/discovery_presenter'
 import type {
+  CandidateDetails,
   Catalog,
   CellCandidates,
   DiscoveryConfig,
@@ -224,5 +228,108 @@ test.group('discovery presenter', () => {
     assert.equal(view.candidates[1].bars[0].direction, 'lower')
     assert.lengthOf(view.candidates[0].bars, 2, 'only selected features get bars')
     assert.equal(view.candidates[0].distance, '4.50')
+    assert.equal(view.candidates[1].inspectHref, `/?${configQuery(CONFIG)}&cell=t1&inspect=2`)
+    assert.equal(view.candidates[1].detailUrl, `/partials/candidates/t1/2?${configQuery(CONFIG)}`)
+  })
+
+  test('the timing line names the query, its time, and both cell counts', ({ assert }) => {
+    const cells = [gridCell(0, 0, -88, 0.1), gridCell(0, 1, -88, 0.2)]
+    const fresh = presentRun(run(cells), CATALOG, REFERENCES)
+    const cached = presentRun(
+      { ...run(cells), timing: { rankingMs: 0, rankingCached: true, totalMs: 21 } },
+      CATALOG,
+      REFERENCES
+    )
+
+    assert.equal(fresh.timing, 'run_discovery: 300 ms · 2 target cells × 3 Earth cells')
+    assert.equal(cached.timing, 'run_discovery: cached · 21 ms · 2 target cells × 3 Earth cells')
+  })
+
+  test('formats decimal degrees with sign and four decimals', ({ assert }) => {
+    assert.equal(
+      formatDecimalDegrees({ latitude: -23.79171, longitude: -69.87424 }),
+      '-23.7917°, -69.8742°'
+    )
+  })
+})
+
+test.group('candidate detail presenter', () => {
+  const details: CandidateDetails = {
+    target: {
+      cellId: 't1',
+      planet: 'Moon',
+      region: 'South_Pole',
+      location: { latitude: -88.4, longitude: 27.9 },
+      terrain: {
+        meanSlopeDeg: 14.9,
+        robustReliefM: 1014.9,
+        slopeStddevDeg: 2.76,
+        meanElevationM: -1520.4,
+      },
+      dataQuality: { validPixelFraction: 1, validSlopePixelFraction: 0.9876 },
+    },
+    candidate: {
+      cellId: 'e1',
+      planet: 'Earth',
+      region: 'Atacama',
+      location: { latitude: -23.79, longitude: -69.62 },
+      terrain: {
+        meanSlopeDeg: 12.98,
+        robustReliefM: 660.9,
+        slopeStddevDeg: 5.08,
+        meanElevationM: 3912,
+      },
+      dataQuality: { validPixelFraction: 1, validSlopePixelFraction: 1 },
+    },
+    comparison: {
+      rank: 1,
+      distance: 4.4972,
+      featureDifferences: { meanSlopeZ: 1.3615, robustReliefZ: -0.42, slopeVariabilityZ: null },
+    },
+    configuration: { referenceRegion: 'Atacama', selectedFeatures: CONFIG.features },
+  }
+
+  test('shows both cells side by side with units, coverage, and elevation note', ({ assert }) => {
+    const view = presentCandidateDetail(details, CONFIG, CATALOG, REFERENCES)
+
+    assert.equal(view.distance, '4.50')
+    assert.equal(view.target.title, 'Moon · South Pole')
+    assert.equal(view.earth.title, 'Earth · Atacama')
+    assert.equal(view.target.coordinates, '-88.4000°, 27.9000°')
+    assert.deepEqual(view.target.coverage, { dem: '100.0%', slope: '98.8%' })
+    assert.deepEqual(
+      view.terrainRows.map((row) => [row.label, row.target, row.earth, row.selected]),
+      [
+        ['Mean slope', '14.9°', '13.0°', true],
+        ['Robust relief', '1015 m', '661 m', true],
+        ['Slope variability', '2.8°', '5.1°', false],
+      ]
+    )
+    assert.equal(
+      view.elevation.note,
+      'not comparable across bodies: different vertical reference systems'
+    )
+    assert.lengthOf(view.bars, 2)
+    assert.lengthOf(view.citations, 2, 'the target body and Earth')
+    assert.match(view.citations[0], /^Moon: LRO LOLA/)
+    assert.match(view.citations[1], /^Earth: NASA SRTM/)
+  })
+
+  test('field tests start with the closest selected feature and carry the caveat', ({ assert }) => {
+    const view = presentCandidateDetail(details, CONFIG, CATALOG, REFERENCES)
+
+    assert.deepEqual(
+      view.fieldTests.map((entry) => [entry.feature, entry.difference, entry.closest]),
+      [
+        ['Robust relief', '0.42', true],
+        ['Mean slope', '1.36', false],
+      ]
+    )
+    assert.equal(view.fieldTests[0].title, 'EVA navigation trials')
+    assert.equal(
+      view.caveat,
+      'Based on terrain shape only. Gravity, regolith, temperature, and radiation are not compared.'
+    )
+    assert.equal(view.caveat, FIELD_TEST_CAVEAT)
   })
 })

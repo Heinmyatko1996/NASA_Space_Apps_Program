@@ -231,11 +231,79 @@ Alpine.data('analogMap', function () {
       for (const element of this.$root.querySelectorAll('[data-rank]')) {
         element.classList.toggle('is-active', element.dataset.rank === rank)
       }
+      const inspect = event.target.closest('a[data-inspect]')
+      if (inspect) {
+        event.preventDefault()
+        this.$dispatch('inspect-candidate', {
+          url: inspect.dataset.inspect,
+          href: inspect.getAttribute('href'),
+          trigger: inspect,
+        })
+        return
+      }
       if (item.classList.contains('map-marker')) {
         event.preventDefault()
         this.$root
           .querySelector(`.candidate[data-rank="${CSS.escape(rank)}"]`)
           ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }
+    },
+  }
+})
+
+/*
+| Candidate detail dialog (pages/home.edge). A native <dialog> opened with
+| showModal(), so focus stays inside and the page behind is inert. Esc
+| closes it natively; a click on the backdrop (the <dialog> element itself,
+| outside its body) closes it too. While open, the address bar carries
+| `inspect=N`, so the link reopens the same match; closing removes it and
+| returns focus to the "Inspect match" link that opened it.
+*/
+Alpine.data('candidateDialog', function () {
+  let trigger = null
+
+  return {
+    init() {
+      // A shared link renders the dialog open (non-modal, for no-JS
+      // visitors). Reopen it as a modal.
+      if (this.$el.open) {
+        this.$el.close()
+        this.$el.showModal()
+        this.$el.querySelector('[data-autofocus]')?.focus()
+      }
+    },
+
+    async open({ url, href, trigger: source }) {
+      trigger = source ?? null
+      const body = this.$refs.body
+      body.replaceChildren(this.$refs.skeleton.content.cloneNode(true))
+      if (!this.$el.open) {
+        this.$el.showModal()
+      }
+      history.replaceState(null, '', href)
+      const response = await this.$swap(url, body)
+      if (response && this.$el.open) {
+        body.querySelector('[data-autofocus]')?.focus()
+      }
+    },
+
+    closed() {
+      // close() from init() fires this too, after the dialog is open again.
+      if (this.$el.open) {
+        return
+      }
+      const url = new URL(location.href)
+      if (url.searchParams.has('inspect')) {
+        url.searchParams.delete('inspect')
+        history.replaceState(null, '', url)
+      }
+      trigger?.focus()
+      trigger = null
+    },
+
+    backdrop(event) {
+      if (event.target === this.$el) {
+        this.$el.close()
       }
     },
   }

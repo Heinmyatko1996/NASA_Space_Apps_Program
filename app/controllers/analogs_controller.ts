@@ -5,11 +5,12 @@ import {
   defaultConfig,
   formState,
   presentBaseline,
+  presentCandidateDetail,
   presentCellCandidates,
   presentRun,
   regionOptions,
 } from '#presenters/discovery_presenter'
-import DiscoveryService from '#services/discovery_service'
+import DiscoveryService, { MAX_TOP_N } from '#services/discovery_service'
 import type {
   Catalog,
   CellCandidates,
@@ -51,11 +52,17 @@ export default class AnalogsController {
 
     let config = defaultConfig(catalog, references)
     let results = null
+    let detail = null
     let problems: Problem[] = []
     if (qs.world !== undefined) {
       try {
         config = await validateDiscovery(this.discovery, qs)
         results = await this.#results(config, catalog, references, stringParam(qs.cell))
+        // `inspect=N` opens candidate N of the selected cell (a shared link).
+        const rank = rankParam(qs.inspect)
+        if (rank !== null && results.selectedCellId) {
+          detail = await this.#detail(config, results.selectedCellId, rank, catalog, references)
+        }
       } catch (error) {
         problems = toProblems(error)
       }
@@ -67,6 +74,7 @@ export default class AnalogsController {
       form: formState(config, catalog, references),
       regions: regionOptions(catalog, config.world, config.region),
       results,
+      detail,
       problems,
     })
   }
@@ -125,6 +133,72 @@ export default class AnalogsController {
     return view.render('partials/cell_candidates', {
       cell: await this.#cellView(result, config, catalog, references),
     })
+  }
+
+  /**
+   * GET /partials/candidates/:cellId/:rank?… : the detail of one ranked
+   * candidate, swapped into the detail dialog.
+   */
+  async candidate({ params, request, response, view }: HttpContext) {
+    const [catalog, references] = await this.#catalog()
+    let config: DiscoveryConfig
+    try {
+      config = await validateDiscovery(this.discovery, request.qs())
+    } catch (error) {
+      response.status(422)
+      return view.render('partials/problems', { problems: toProblems(error) })
+    }
+
+    const rank = rankParam(params.rank)
+    const detail =
+      rank === null ? null : await this.#detail(config, params.cellId, rank, catalog, references)
+    if (!detail) {
+      response.status(404)
+      return view.render('partials/problems', {
+        problems: [{ message: 'This candidate is not in the ranking for this configuration.' }],
+      })
+    }
+    return view.render('partials/candidate_detail', { detail })
+  }
+
+  /**
+   * Candidate detail plus where both cells are: the Earth cell on the
+   * reference-region inset and the target cell on the region's cell grid.
+   */
+  async #detail(
+    config: DiscoveryConfig,
+    cellId: string,
+    rank: number,
+    catalog: Catalog,
+    references: ReferenceRegion[]
+  ) {
+    const [details, run, extent] = await Promise.all([
+      this.discovery.candidateDetails(config, cellId, rank),
+      this.discovery.run(config),
+      this.discovery.regionExtent('Earth', config.reference),
+    ])
+    if (!details) {
+      return null
+    }
+    const grid = presentRun(run, catalog, references).grid
+    return {
+      ...presentCandidateDetail(details, config, catalog, references),
+      map: extent
+        ? this.maps.inset(extent, [
+            { rank, cellId: details.candidate.cellId, location: details.candidate.location },
+          ])
+        : null,
+      grid: {
+        columns: grid.columns,
+        rows: grid.rows,
+        cells: grid.cells.map((cell) => ({
+          row: cell.row,
+          col: cell.col,
+          eligible: cell.eligible,
+          target: cell.cellId === details.target.cellId,
+        })),
+      },
+    }
   }
 
   #catalog(): Promise<[Catalog, ReferenceRegion[]]> {
@@ -206,6 +280,12 @@ export default class AnalogsController {
       )
     )
   }
+}
+
+/** A candidate rank from the URL: a whole number from 1 to MAX_TOP_N. */
+function rankParam(value: unknown): number | null {
+  const rank = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : Number.NaN
+  return Number.isInteger(rank) && rank >= 1 && rank <= MAX_TOP_N ? rank : null
 }
 
 function stringParam(value: unknown): string | undefined {

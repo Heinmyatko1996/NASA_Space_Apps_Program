@@ -154,4 +154,57 @@ test.group('Discovery pages', (group) => {
     assert.equal(count(html, /class="chip"\s+data-layer=/g), 3)
     assert.include(html, 'Context only: the ranking uses terrain features alone.')
   })
+
+  test('each candidate card links to its detail', async ({ assert }) => {
+    const { html } = await get(`/partials/cells/moon_south_south_pole_r8_c4?${CONFIG}`)
+
+    assert.equal(count(html, /class="candidate__inspect"/g), 4)
+    assert.include(
+      html,
+      `data-inspect="/partials/candidates/moon_south_south_pole_r8_c4/2?${CONFIG.replaceAll('&', '&amp;')}"`
+    )
+  })
+
+  test('the candidate partial shows the full detail of one match', async ({ assert }) => {
+    const { status, html } = await get(
+      `/partials/candidates/moon_south_south_pole_r8_c4/2?${CONFIG}`
+    )
+
+    assert.equal(status, 200)
+    assert.notInclude(html, '<html')
+    assert.include(html, 'Match #2')
+    assert.include(html, 'Data coverage: DEM')
+    assert.include(html, 'not comparable across bodies: different vertical reference systems')
+    assert.include(
+      html,
+      'Based on terrain shape only. Gravity, regolith, temperature, and radiation are not compared.'
+    )
+    assert.equal(count(html, /<li class="field-test/g), 2, 'one idea per selected feature')
+    assert.equal(count(html, /class="mini-grid__cell/g), 400)
+    assert.equal(count(html, /is-target"/g), 1)
+    assert.include(html, 'LAYERS=VIIRS_NOAA20_CorrectedReflectance_TrueColor')
+    assert.match(html, /<span class="readout">\s*\d+\.\d{2}\s*<\/span>\s*distance/)
+  })
+
+  test('the candidate partial 404s for a rank out of range and 422s for bad settings', async ({
+    assert,
+  }) => {
+    const outOfRange = await get(`/partials/candidates/moon_south_south_pole_r8_c4/99?${CONFIG}`)
+    const unknownCell = await get(`/partials/candidates/moon_south_south_pole_r999_c0/1?${CONFIG}`)
+    const invalid = await get('/partials/candidates/moon_south_south_pole_r8_c4/1?world=Venus')
+
+    assert.equal(outOfRange.status, 404)
+    assert.equal(unknownCell.status, 404)
+    assert.equal(invalid.status, 422)
+  })
+
+  test('an inspect link renders the page with the detail dialog open', async ({ assert }) => {
+    const { status, html } = await get(`/?${CONFIG}&cell=moon_south_south_pole_r8_c4&inspect=3`)
+
+    assert.equal(status, 200)
+    assert.match(html, /<dialog[^>]*id="candidate-dialog"[^>]*\sopen\s*>/)
+    assert.include(html, 'Match #3')
+    const closed = await get(`/?${CONFIG}&cell=moon_south_south_pole_r8_c4`)
+    assert.notMatch(closed.html, /<dialog[^>]*\sopen\s*>/)
+  })
 })

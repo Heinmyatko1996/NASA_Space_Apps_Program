@@ -41,7 +41,14 @@
             <span class="candidate__unit">distance</span>
           </span>
         </div>
-        <p class="candidate__meta">Earth · {{ candidate.region }} · {{ candidate.coordinates }}</p>
+        <p class="candidate__meta">
+          Earth · {{ candidate.region }} · {{ candidate.coordinates }}
+          <a
+            class="candidate__inspect"
+            href="{{ candidate.inspectHref }}"
+            data-inspect="{{ candidate.detailUrl }}"
+          >Inspect match</a>
+        </p>
         <ul class="diffs">
           @each(bar in candidate.bars)
             <li class="diff">
