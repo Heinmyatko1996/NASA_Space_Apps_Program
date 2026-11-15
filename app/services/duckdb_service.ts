@@ -30,7 +30,7 @@ export default class DuckDbService {
 
   /**
    * Creates the DuckDB instance. `options` are DuckDB configuration settings,
-   * e.g. `{ file_search_path: '/app/root' }` so `read_csv('database/…')`
+   * e.g. `{ file_search_path: '/app/root' }` so `read_parquet('data/…')`
    * resolves against the app root.
    */
   async open(path = ':memory:', options: Record<string, string> = {}) {

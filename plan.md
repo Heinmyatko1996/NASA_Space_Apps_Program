@@ -76,7 +76,7 @@ planetary-analog-finder/
 │   ├── api/                            # get_catalog, get_reference_regions, get_ranked_candidates,
 │   │                                   # get_discovery_summary, get_candidate_diversity, get_candidate_details
 │   └── discovery/run_discovery.sql     # Configurable ranking macro
-├── scripts/                            # Hein (from main): offline Python pipeline, DEM → Parquet
+├── scripts/                            # Hein's offline Python pipeline: stays on main, git-ignored here
 ├── providers/
 │   ├── duckdb_provider.ts              # Registers checks + macros at boot, closes on shutdown
 │   └── discovery_provider.ts           # Binds DiscoveryService as a singleton
@@ -105,11 +105,10 @@ planetary-analog-finder/
 │           └── candidate_detail.edge   # Side-by-side target vs Earth comparison (modal)
 ├── start/
 │   └── routes.ts                       # Route definitions
-├── pyproject.toml, uv.lock             # Python environment for scripts/ only
 └── plan.md                             # Project roadmap
 ```
 
-**Ownership:** `queries/`, `scripts/`, and `docs/` belong to Hein. The app uses them unmodified, and changes to them go through Hein. SQL the app needs beyond Hein's macros lives in `database/app_macros.sql`, ready to move into `queries/` later if Hein agrees.
+**Ownership:** `queries/`, `scripts/` (on `main`), and `docs/` belong to Hein. The app uses them unmodified, and changes to them go through Hein. SQL the app needs beyond Hein's macros lives in `database/app_macros.sql`, ready to move into `queries/` later if Hein agrees.
 
 ---
 
@@ -160,7 +159,7 @@ planetary-analog-finder/
 ### Phase 2: Bring In Hein's TerraTwin Data & SQL (Hours 3–9)
 **Objective:** Merge Hein's pipeline, queries, and docs from `main`; get the processed Parquet files; and register the TerraTwin macros in the app's DuckDB instance at boot. This replaces the curated-CSV schema and seed files from step 1.5.
 
-- [ ] **2.1 Merge `main` into `dev`:**
+- [x] **2.1 Merge `main` into `dev`: done differently. `main` came in through `phase-3-discovery-service` (`a686d15`); `8586ce5` and `5fd8181` then kept only the website's files from Hein's manifest (`docs/`, `queries/api/`, `queries/discovery/run_discovery.sql`) and left the pipeline on `main`. `.gitignore` ignores the pipeline paths and everything under `data/` except the three `*_5km_500m.parquet` files.**
   - `git merge origin/main`. A trial merge has no conflicts: `main` only adds `queries/`, `scripts/`, `docs/`, and `dataset_to_download.md`.
   - **Restore the Python and data ignore rules in the same merge.** `dev` replaced the Python `.gitignore`, and git keeps `dev`'s version, so after the merge `data/`, `.venv/`, and `__pycache__/` are no longer ignored. Hein's raw and intermediate GeoTIFFs could then be committed by accident. Append:
     ```gitignore
@@ -176,10 +175,10 @@ planetary-analog-finder/
     data/processed/parquet/*
     !data/processed/parquet/*_5km_500m.parquet
     ```
-- [ ] **2.2 Restore the Python Environment for `scripts/`:**
+- [x] **2.2 Restore the Python Environment for `scripts/`: dropped. The pipeline and its Python project stay on `main` (`8586ce5`), so this repo needs no Python. Rebuild the Parquet files from a `main` checkout.**
   - `dev` deleted `pyproject.toml`, `uv.lock`, and `.python-version`, but Hein's scripts need them. Restore a slim `pyproject.toml` (`requires-python = ">=3.11"`) with only what `scripts/` imports: `numpy`, `pandas`, `pyarrow`, `rasterio`, `pyproj`. Add `duckdb` to run the SQL from Python or the CLI. Then run `uv lock`.
   - `scripts/build_common_resolution_slopes.sh` calls `gdaldem`, so the GDAL command-line tools must be installed on the machine that runs the pipeline (`apt install gdal-bin` / `brew install gdal`).
-- [ ] **2.3 Get the Processed Parquet Files:**
+- [x] **2.3 Get the Processed Parquet Files: Hein's real files are in `data/processed/parquet/` (rankings sha256 `47ad8d77…`; counts in 3.5) and committed: 9.5 MB in total (the rankings file is 9.0 MB), so no Git LFS. Run the rebuild path below from a `main` checkout.**
   - **Fast path:** copy the three `*_5km_500m.parquet` files from Hein into `data/processed/parquet/`.
   - **Rebuild path** (from the repo root, given the clipped AOI DEMs `data/processed/aoi/{earth_atacama,moon_south,mars_jezero}_dem.tif` from Hein, which no script creates):
     ```bash
@@ -191,7 +190,7 @@ planetary-analog-finder/
     ```
     `build_planet_features.py`, `build_atacama_features.py`, and `validate_planet_features.py` produce the older `_5km` files, which the website queries don't use.
   - **Commit the three Parquet files** (the `.gitignore` exceptions in 2.1 allow exactly these). Then the server runs right after a clone, and deployment needs no Python or raw data. Check their size with `du -h` first, and switch to Git LFS if any file is large. Agree on this with Hein, who regenerates them.
-- [ ] **2.4 Register the TerraTwin Macros at Boot (`providers/duckdb_provider.ts`):**
+- [x] **2.4 Register the TerraTwin Macros at Boot (`providers/duckdb_provider.ts`): `SCRIPTS = ['database/checks.sql', ...MACRO_SCRIPTS]`; `database/schema.sql` and `database/seed.sql` are deleted.**
   - Replace `SCRIPTS` (and delete `database/schema.sql` / `database/seed.sql`) with:
     ```ts
     const SCRIPTS = [
@@ -208,8 +207,9 @@ planetary-analog-finder/
   - `get_catalog.sql` and `get_reference_regions.sql` are plain `SELECT`s, not macros. `DiscoveryService` reads them from disk and runs them **once at boot**, then caches the rows; the data cannot change while the server runs.
   - Relative paths in Hein's `read_parquet('data/processed/parquet/…')` resolve through the existing `file_search_path`, in dev and in the production build alike.
   - `queries/catalog/*.sql`, `queries/discovery/earth_reference_statistics.sql`, and `queries/discovery/rank_earth_candidates.sql` are Hein's standalone analysis queries; the app does not load them.
-- [ ] **2.5 Write Boot-Time Data Checks (`database/checks.sql`):**
-  - DuckDB binds a macro body only when it is called, so missing Parquet files would not fail boot; the first request would fail instead. `checks.sql` reads each of the three files and uses `error()` to stop boot with a clear message (e.g., `Missing data/processed/parquet/…: see plan.md step 2.3`).
+- [x] **2.5 Write Boot-Time Data Checks (`database/checks.sql`): done, with tests in `tests/unit/data_checks.spec.ts` (complete data passes; a missing file, missing columns, a world with no eligible cells, and a baseline without the Moon each fail with their message).**
+  - The premise below is wrong for DuckDB 2.0: it binds a table macro's body at `CREATE`, so a missing file already stops boot, but with a bare IO/Binder error. The checks run first and say which file or column is missing and where to get it. Each check is an aggregate (`SELECT CASE WHEN count(*) > 0 THEN error(…) END FROM … WHERE bad`), because `SELECT error(…) … WHERE bad` returns no rows and never fires. File existence compares `parse_filename()` of a `glob()`, because `glob()` returns absolute paths when it resolves through `file_search_path` and cannot take a column argument.
+  - Original note: DuckDB binds a macro body only when it is called, so missing Parquet files would not fail boot; the first request would fail instead. `checks.sql` reads each of the three files and uses `error()` to stop boot with a clear message (e.g., `Missing data/processed/parquet/…: see plan.md step 2.3`).
   - Check that each file exists, that the columns the macros use are present (`planet`, `region`, `cell_id`, `grid_row`, `grid_col`, `latitude_center`, `longitude_center`, the three features, both coverage fractions), and that Earth, Moon, and Mars each have eligible cells. Don't hard-code row counts, because Hein will add Earth regions.
 - [x] **2.6 Write App-Owned Macros (`database/app_macros.sql`): moved to Phase 3 and done there; the final macros differ from the list below (see Phase 3's hand-off notes).**
   - `custom_discovery_summary(planet, region, reference, features, top_n)`: the same output columns as Hein's `get_discovery_summary` (cell count, min/q25/median/q75/max/mean best distance), but computed from the rank-1 rows of `run_discovery` instead of the baseline file. Hein's integration guide requires this: baseline summaries must not be shown as custom-discovery results.
@@ -217,9 +217,9 @@ planetary-analog-finder/
   - `target_cells(planet, region)`: `cell_id`, `grid_row`, `grid_col`, latitude/longitude, and an `eligible` flag (both coverage fractions ≥ 0.95) from `planet_terrain_features_5km_500m.parquet`, for the cell grid. `grid_row` / `grid_col` can be negative (e.g., `…_r-7_c-3`), so the grid component offsets them by their minimum.
   - `region_extent(planet, region)`: min/max latitude and longitude of a region's cells, for the Atacama map inset (no hard-coded bounding box).
   - `featured_target_cell(planet, region)`: the target cell with the lowest rank-1 baseline distance, for the Explore cards.
-- [ ] **2.7 Build & Dev-Server Config (`adonisrc.ts`):**
-  - Replace the `database/seeds/*.csv` `metaFiles` entry with `queries/**/*.sql` and `data/processed/parquet/*.parquet`, both with `reloadServer: true`. Keep `database/**/*.sql`.
-- [ ] **2.8 Verify from the Command Line:**
+- [x] **2.7 Build & Dev-Server Config (`adonisrc.ts`):**
+  - Replace the `database/seeds/*.csv` `metaFiles` entry with `queries/**/*.sql` and `data/processed/parquet/*_5km_500m.parquet` (only the three files the app reads), both with `reloadServer: true`. Keep `database/**/*.sql`. `node ace build` copies all of them into `build/`.
+- [x] **2.8 Verify from the Command Line: verified with the real data. The CLI query returns rank 1 `earth_atacama_atacama_r-7_c-3` at distance 4.4972, and the production build's `/partials/cells/moon_south_south_pole_r8_c4?…` shows the same candidate at 4.50. Boot logs `DuckDB ready in memory (data checks + macros in ~140 ms)`; with the rankings file renamed in `build/`, boot exits with code 1 and the `checks.sql` message.**
   - From the repo root, in the DuckDB CLI: `.read queries/discovery/run_discovery.sql`, then `SELECT * FROM run_discovery('Moon', 'South_Pole', 'Atacama', ['mean_slope_deg', 'robust_relief_m'], 10) WHERE target_cell_id = 'moon_south_south_pole_r8_c4' ORDER BY rank;`. Rank 1 should be `earth_atacama_atacama_r-7_c-3` with distance ≈ 4.497, as in the example in `docs/api/candidate_details_response.md`.
   - `npm run dev` logs `DuckDB ready in memory`. Temporarily rename one Parquet file and confirm boot stops with the message from `checks.sql`.
 
@@ -255,7 +255,7 @@ Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run 
   - So each configuration (target, reference region, sorted feature set) is ranked **once**, up to rank 25, into the in-memory table `discovery_cache`, and the app macros read from that table. A repeat run takes about 20–50 ms. Concurrent requests for the same configuration share one ranking, and a failed ranking is not cached. There are at most 7 feature sets per target and reference region, so the cache stays small.
   - `run()` returns `timing` (`rankingMs`, `rankingCached`, `totalMs`) for the header indicator in 6.3 and logs it.
   - Tests confirm that, with all three features, `custom_discovery_summary`, `custom_candidate_diversity`, and `cell_candidates` return exactly the same rows as Hein's `get_discovery_summary`, `get_candidate_diversity`, and `get_ranked_candidates`.
-- [ ] **3.5 Re-check With the Real Data (after Phase 2 merges):**
+- [x] **3.5 Re-check With the Real Data: done on `dev` (both phase branches are already merged in). All unit and HTTP tests pass with the real files present; the fixture tests read only the fixture (`5ac4ef1`, `646d5a0`). Real counts: Atacama 449 cells / 365 eligible, Jezero 439 / 360, South_Pole 400 / 324. A custom run with all three features equals Hein's baseline file row for row (max |Δdistance| ≈ 1e-14), so the two agree. Timing in the production build: first ranking 310 ms (Moon) / 487 ms (Mars), cached repeat ~20 ms in the service. The HTTP round trip for a cached run is ~250 ms, mostly rendering the ~170 KB fragment (see 6.3).**
   - Merge `dev` into the branch, run `node ace test unit`, and repeat the timing with the real Parquet files.
   - Compare a custom run with all three features against Hein's baseline. On the fixtures they match exactly because the fixture baseline is generated by `run_discovery`. Hein's real baseline comes from `scripts/build_terrain_analog_ranking.py`; if the numbers differ, ask Hein which one is authoritative.
 
@@ -268,8 +268,7 @@ Built on branch `phase-4-ui` (from `phase-3-discovery-service`) before Phase 2 l
 
 **Local development before Phase 2 lands:**
 - `node ace terratwin:fixture` writes the synthetic test data into `data/processed/parquet/`. It refuses to overwrite existing files, which may be Hein's real data, unless given `--force`. The values are fake: never demo or commit them.
-- `providers/duckdb_provider.ts` temporarily registers `MACRO_SCRIPTS` at boot. Phase 2 changes the same line to `['database/checks.sql', ...MACRO_SCRIPTS]`; keep Phase 2's version when merging.
-- Until Phase 2's `.gitignore` rules land, keep `data/` out of git locally: add `/data/` to `.git/info/exclude`.
+- (Done in Phase 2: the provider now registers `['database/checks.sql', ...MACRO_SCRIPTS]`, and `.gitignore` keeps `data/` out of git except the three Parquet files.)
 
 **Routes** (`app/controllers/analogs_controller.ts`, data shaped by `app/presenters/discovery_presenter.ts`):
 

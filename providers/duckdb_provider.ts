@@ -4,22 +4,22 @@ import { MACRO_SCRIPTS } from '#database/macro_scripts'
 import DuckDbService from '#services/duckdb_service'
 
 /**
- * SQL scripts that build the database, run in this order in one transaction.
- *
- * Temporary (phase-4-ui): registers the TerraTwin macros so the UI runs
- * locally. Phase 2 (step 2.4) replaces this line with
- * ['database/checks.sql', ...MACRO_SCRIPTS]; keep that version on merge.
+ * SQL scripts run at boot, in this order, in one transaction: the data checks
+ * first (so a missing Parquet file stops boot with a clear message), then the
+ * TerraTwin macros. Tests register the same MACRO_SCRIPTS list.
  */
-const SCRIPTS = [...MACRO_SCRIPTS]
+const SCRIPTS = ['database/checks.sql', ...MACRO_SCRIPTS]
 
 /**
  * Builds the app's DuckDB database in memory at every boot from the SQL
  * scripts above, and closes it on shutdown.
  *
- * In memory on purpose: DuckDB locks a database file to a single process, so
- * a separate seed command could not open the file while the server runs. All
- * data comes from the seed CSVs and the app never writes, so rebuilding at
- * boot takes milliseconds and needs no database file in deployments.
+ * In memory on purpose: DuckDB locks a database file to a single process.
+ * The macros read Hein's prebuilt Parquet files in data/processed/parquet/
+ * directly and the app never writes them, so registering the macros at boot
+ * takes milliseconds and needs no database file in deployments. The macros
+ * are not TEMP, so every connection DuckDbService opens on this instance
+ * sees them.
  */
 export default class DuckdbProvider {
   constructor(protected app: ApplicationService) {}
@@ -35,14 +35,14 @@ export default class DuckdbProvider {
   }
 
   /**
-   * Open DuckDB and run the schema + seed scripts before the HTTP server
-   * accepts requests. A failing script stops the app from starting.
+   * Open DuckDB, check the data, and register the macros before the HTTP
+   * server accepts requests. A failing script stops the app from starting.
    */
   async start() {
     const startedAt = performance.now()
     const db = await this.app.container.make(DuckDbService)
 
-    // Relative paths in read_csv(...) resolve against the app root, in
+    // Relative paths in read_parquet(...) resolve against the app root, in
     // development and in the production build alike.
     await db.open(':memory:', { file_search_path: this.app.makePath() })
 
@@ -53,7 +53,7 @@ export default class DuckdbProvider {
 
     const logger = await this.app.container.make('logger')
     logger.info(
-      'DuckDB ready in memory (schema + seed in %d ms)',
+      'DuckDB ready in memory (data checks + macros in %d ms)',
       Math.round(performance.now() - startedAt)
     )
   }

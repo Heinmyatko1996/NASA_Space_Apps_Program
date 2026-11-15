@@ -111,15 +111,20 @@ export default defineConfig({
       reloadServer: false,
     },
     /**
-     * DuckDB schema/seed SQL and seed CSVs, read at boot by the DuckDB provider.
-     * Restart on change so the in-memory database is rebuilt.
+     * SQL the DuckDB provider runs at boot (data checks, Hein's TerraTwin
+     * macros and catalog queries, the app's own macros) and the Parquet files
+     * they read. Restart on change so the in-memory database is rebuilt.
      */
     {
       pattern: 'database/**/*.sql',
       reloadServer: true,
     },
     {
-      pattern: 'database/seeds/*.csv',
+      pattern: 'queries/**/*.sql',
+      reloadServer: true,
+    },
+    {
+      pattern: 'data/processed/parquet/*_5km_500m.parquet',
       reloadServer: true,
     },
     {
