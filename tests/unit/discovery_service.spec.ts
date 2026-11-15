@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import { errors } from '@vinejs/vine'
@@ -6,7 +7,7 @@ import DiscoveryService from '#services/discovery_service'
 import type { DiscoveryConfig } from '#services/discovery_service'
 import type DuckDbService from '#services/duckdb_service'
 import { MAX_TOP_N } from '#services/discovery_service'
-import { openTerraTwin } from '#tests/helpers/terratwin'
+import { openTerraTwin, terraTwinFixtureRoot } from '#tests/helpers/terratwin'
 
 test('the container provides one shared DiscoveryService', async ({ assert }) => {
   const first = await app.container.make(DiscoveryService)
@@ -49,6 +50,28 @@ test.group('DiscoveryService', (group) => {
     discovery = terraTwin.discovery
     db = terraTwin.db
     return () => terraTwin.close()
+  })
+
+  test('reads the fixture, never the real data in data/processed/parquet', async ({ assert }) => {
+    // Every relative Parquet path read from the working directory first,
+    // so with Hein's real files present the "fixture" ran on real data.
+    const fixtureFile = join(
+      await terraTwinFixtureRoot(),
+      'data/processed/parquet/planet_terrain_features_5km_500m.parquet'
+    )
+    const expected = await db.first<{ cells: number }>(
+      `SELECT count(*)::INTEGER AS cells FROM read_parquet($file)
+       WHERE planet = 'Moon' AND region = 'South_Pole'
+         AND valid_pixel_fraction >= 0.95 AND valid_slope_pixel_fraction >= 0.95`,
+      { file: fixtureFile }
+    )
+    const [run, catalog] = await Promise.all([discovery.run(moon()), discovery.catalog()])
+
+    assert.equal(run.summary.targetCellCount, expected!.cells)
+    assert.equal(
+      catalog.regions.find((region) => region.id === 'Moon:South_Pole')?.eligibleCellCount,
+      expected!.cells
+    )
   })
 
   test('catalog lists target worlds, their regions, and features', async ({ assert }) => {
