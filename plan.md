@@ -52,6 +52,8 @@ planetary-analog-finder/
 ├── app/
 │   ├── controllers/
 │   │   └── analogs_controller.ts       # Full page + Edge partial endpoints
+│   ├── exceptions/
+│   │   └── discovery_error.ts          # run_discovery error() messages → 422 field errors
 │   ├── services/
 │   │   ├── duckdb_service.ts           # Holds the DuckDB instance; typed query helpers
 │   │   ├── discovery_service.ts        # Calls the TerraTwin macros; maps rows to view models
@@ -62,7 +64,8 @@ planetary-analog-finder/
 │   └── processed/parquet/              # The 3 Parquet files from Hein's pipeline (committed)
 ├── database/
 │   ├── checks.sql                      # Boot-time data checks: files, columns, regions
-│   └── app_macros.sql                  # App-owned macros built on run_discovery and the Parquet files
+│   ├── app_macros.sql                  # App-owned macros + discovery_cache, built on run_discovery
+│   └── macro_scripts.ts                # Ordered list of macro SQL files (provider + tests)
 ├── docs/                               # Hein (from main): methodology and SQL/API contracts
 ├── queries/                            # Hein (from main): TerraTwin SQL macros and catalog queries
 │   ├── api/                            # get_catalog, get_reference_regions, get_ranked_candidates,
@@ -70,7 +73,8 @@ planetary-analog-finder/
 │   └── discovery/run_discovery.sql     # Configurable ranking macro
 ├── scripts/                            # Hein (from main): offline Python pipeline, DEM → Parquet
 ├── providers/
-│   └── duckdb_provider.ts              # Registers checks + macros at boot, closes on shutdown
+│   ├── duckdb_provider.ts              # Registers checks + macros at boot, closes on shutdown
+│   └── discovery_provider.ts           # Binds DiscoveryService as a singleton
 ├── resources/
 │   ├── css/
 │   │   └── app.css                     # Kit design tokens, tuned to a dark telemetry theme
@@ -198,7 +202,7 @@ planetary-analog-finder/
 - [ ] **2.5 Write Boot-Time Data Checks (`database/checks.sql`):**
   - DuckDB binds a macro body only when it is called, so missing Parquet files would not fail boot; the first request would fail instead. `checks.sql` reads each of the three files and uses `error()` to stop boot with a clear message (e.g., `Missing data/processed/parquet/…: see plan.md step 2.3`).
   - Check that each file exists, that the columns the macros use are present (`planet`, `region`, `cell_id`, `grid_row`, `grid_col`, `latitude_center`, `longitude_center`, the three features, both coverage fractions), and that Earth, Moon, and Mars each have eligible cells. Don't hard-code row counts, because Hein will add Earth regions.
-- [ ] **2.6 Write App-Owned Macros (`database/app_macros.sql`):**
+- [x] **2.6 Write App-Owned Macros (`database/app_macros.sql`): moved to Phase 3 and done there; the final macros differ from the list below (see Phase 3's hand-off notes).**
   - `custom_discovery_summary(planet, region, reference, features, top_n)`: the same output columns as Hein's `get_discovery_summary` (cell count, min/q25/median/q75/max/mean best distance), but computed from the rank-1 rows of `run_discovery` instead of the baseline file. Hein's integration guide requires this: baseline summaries must not be shown as custom-discovery results.
   - `custom_candidate_diversity(...)`: the same columns as Hein's `get_candidate_diversity`, also computed from `run_discovery` rank-1 rows. Matching column names let one partial render both baseline and custom results.
   - `target_cells(planet, region)`: `cell_id`, `grid_row`, `grid_col`, latitude/longitude, and an `eligible` flag (both coverage fractions ≥ 0.95) from `planet_terrain_features_5km_500m.parquet`, for the cell grid. `grid_row` / `grid_col` can be negative (e.g., `…_r-7_c-3`), so the grid component offsets them by their minimum.
@@ -215,22 +219,36 @@ planetary-analog-finder/
 ### Phase 3: Discovery Service & Validation (Hours 9–13)
 **Objective:** One service that calls the TerraTwin macros with bound parameters and returns view-ready objects, plus validation that only accepts values the catalog offers.
 
-- [ ] **3.1 Implement `DiscoveryService` (`app/services/discovery_service.ts`):**
-  - `catalog()` / `referenceRegions()`: cached boot results from 2.4, grouped by `item_type` (`world`, `region`, `feature`).
-  - `baseline(world, region)`: `get_discovery_summary`, `get_candidate_diversity`, and `get_ranked_candidates` for `featured_target_cell`, for the Explore cards.
-  - `run(config)`: `custom_discovery_summary`, `custom_candidate_diversity`, `target_cells`, and the rank-1 rows of `run_discovery` (to color the grid).
-  - `cellCandidates(config, cellId)`: `run_discovery` rows for one target cell, ordered by rank and joined to `planet_terrain_features_5km_500m.parquet` for each Earth cell's coordinates.
-  - `candidateDetails(config, cellId, rank)`: `get_candidate_details`.
-  - Bind every value with `$name` placeholders, never string concatenation. Bind `featureIds` with `listValue()` from `@duckdb/node-api` and cast in SQL (`$features::VARCHAR[]`, `$topN::INTEGER`), because a JS number binds as `DOUBLE` by default. Add a unit test that a list binding reaches `run_discovery` correctly.
-  - Cast `rank` and every count to `INTEGER` in the wrapping `SELECT` (the `BIGINT` gotcha from 1.5).
-  - Map snake_case columns to the camelCase names in `docs/api/candidate_details_reponse.md` (e.g., `slope_difference_z` → `featureDifferences.meanSlopeZ`), keeping `NULL` for unselected features.
-- [ ] **3.2 Validate Input (`app/validators/discovery_validator.ts`):**
-  - VineJS rules backed by the cached catalog: `world` is a catalog world; `region` belongs to that world; `reference` is a catalog reference region; `features` is an array of 1–3 unique catalog feature IDs; `topN` is an integer from 1 to 25.
-  - The checkbox field is named `features[]` so the query string parses to an array.
-- [ ] **3.3 Translate SQL Errors:**
-  - `run_discovery` raises its own errors (`Select at least one feature`, `Duplicate feature IDs are not allowed`, `Unknown feature ID supplied`, `p_top_n must be greater than zero`, `Unsupported target planet`, `No eligible Earth reference cells`, `No eligible target cells`). Validation should catch these first, but if one reaches DuckDB, map the message to a 422 with a readable field error instead of a 500.
-- [ ] **3.4 Measure Performance:**
-  - Each call recomputes about 118k–131k target × Earth pairs. Log the query time for each request (used by the header indicator in 6.3). If a call takes longer than about 50 ms, cache results in memory by normalized configuration. There are few configurations: 2 targets × 7 feature subsets × 1 reference region.
+Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run against synthetic Parquet fixtures (`tests/helpers/terratwin_fixture.ts`) that have the real file names and columns and roughly the real cell counts. Step 3.5 re-checks everything with the real data once Phase 2 lands.
+
+**Hand-off to Phase 2:**
+- Step 2.6 moved here and is done: `database/app_macros.sql` defines `discovery_config_key`, `cached_discovery`, `custom_discovery_summary`, `custom_candidate_diversity`, `target_cell_grid`, `cell_candidates`, `region_extent`, and `featured_target_cell` (the file header explains them).
+- In step 2.4, build the provider's list from the shared constant instead of writing it out: `import { MACRO_SCRIPTS } from '#database/macro_scripts'`, then `const SCRIPTS = ['database/checks.sql', ...MACRO_SCRIPTS]`. Tests register the same list.
+- The provider doesn't need to load the catalog: `DiscoveryService` runs `get_catalog.sql` and `get_reference_regions.sql` on first use and caches the rows.
+
+- [x] **3.1 Implement `DiscoveryService` (`app/services/discovery_service.ts`):**
+  - `providers/discovery_provider.ts` binds it as a container singleton. It holds caches, so there must be one instance per app. Controllers get it with `@inject()`.
+  - `catalog()` / `referenceRegions()`: Hein's `get_catalog.sql` / `get_reference_regions.sql`, run once on first use and cached. Regions carry both the catalog ID (`Moon:South_Pole`) and the bare name the macros take (`South_Pole`).
+  - `baseline(world, region)`: Hein's `get_discovery_summary`, `get_candidate_diversity`, and `get_ranked_candidates` for `featured_target_cell`, for the Explore cards.
+  - `run(config)`: summary, diversity, and the target cell grid for a custom configuration, plus `bestCellId` and timing.
+  - `cellCandidates(config, cellId)`: ranked Earth candidates for one target cell, with coordinates and original terrain values.
+  - `candidateDetails(config, cellId, rank)`: Hein's `get_candidate_details`, mapped to the JSON shape in `docs/api/candidate_details_reponse.md`.
+  - `regionExtent(planet, region)`: bounding box for map insets.
+  - Every value is a bound `$name` parameter. `featureIds` is bound with `listValue()` and the explicit type `LIST(VARCHAR)`, because an empty list can't infer its type and fails otherwise. `DuckDbService.all/first/run` gained an optional `types` argument for this. JS integers already bind as `INTEGER`.
+  - Counts and ranks are cast to `INTEGER` in SQL (`SELECT * REPLACE (rank::INTEGER AS rank) …`).
+- [x] **3.2 Validate Input (`app/validators/discovery_validator.ts`):**
+  - `validateDiscovery(discovery, request.qs())` returns a `DiscoveryConfig` or throws VineJS's `E_VALIDATION_ERROR` (HTTP 422). The rules come from the cached catalog: `world` is a target world; `region` is a target region of that world; `reference` is an Earth reference region; `features` is 1–3 unique catalog features; `topN` is a whole number from 1 to 25, defaulting to 10.
+  - A single `features=…` string is wrapped in an array. Name the checkboxes `features[]`.
+- [x] **3.3 Translate SQL Errors (`app/exceptions/discovery_error.ts`):**
+  - The `error()` messages from `run_discovery` become the same `E_VALIDATION_ERROR` the validator throws, on the field the user can fix (e.g., `Unknown feature ID supplied` → `features`). Phase 4 can handle both the same way.
+- [x] **3.4 Measure Performance & Cache Rankings:**
+  - Measured on fixtures of real size, `run_discovery` takes **300–550 ms** per call, because it compares every target cell with every Earth cell. That is far over the 50 ms budget. `get_candidate_details` stays around 30 ms because it only needs one target cell.
+  - So each configuration (target, reference region, sorted feature set) is ranked **once**, up to rank 25, into the in-memory table `discovery_cache`, and the app macros read from that table. A repeat run takes about 20–50 ms. Concurrent requests for the same configuration share one ranking, and a failed ranking is not cached. There are at most 7 feature sets per target and reference region, so the cache stays small.
+  - `run()` returns `timing` (`rankingMs`, `rankingCached`, `totalMs`) for the header indicator in 6.3 and logs it.
+  - Tests confirm that, with all three features, `custom_discovery_summary`, `custom_candidate_diversity`, and `cell_candidates` return exactly the same rows as Hein's `get_discovery_summary`, `get_candidate_diversity`, and `get_ranked_candidates`.
+- [ ] **3.5 Re-check With the Real Data (after Phase 2 merges):**
+  - Merge `dev` into the branch, run `node ace test unit`, and repeat the timing with the real Parquet files.
+  - Compare a custom run with all three features against Hein's baseline. On the fixtures they match exactly because the fixture baseline is generated by `run_discovery`. Hein's real baseline comes from `scripts/build_terrain_analog_ranking.py`; if the numbers differ, ask Hein which one is authoritative.
 
 ---
 
