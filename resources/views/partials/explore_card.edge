@@ -1,0 +1,52 @@
+{{-- One Explore card from Hein's baseline ranking. Expects `example`. --}}
+<article class="explore-card">
+  <header class="explore-card__header">
+    <h3 class="explore-card__title">{{ example.title }}</h3>
+    <span class="tag">Baseline · {{ example.reference }}</span>
+  </header>
+
+  <dl class="stats stats--compact">
+    <div class="stat">
+      <dt class="stat__label">Target cells</dt>
+      <dd class="stat__value readout">{{ example.targetCellCount }}</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Median best distance</dt>
+      <dd class="stat__value readout">{{ example.median }}</dd>
+      <dd class="stat__note">range {{ example.min }}–{{ example.max }}</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Candidate diversity</dt>
+      <dd class="stat__value readout">{{ example.diversity }}</dd>
+      <dd class="stat__note">unique best matches per target cell</dd>
+    </div>
+  </dl>
+  @if(example.featured)
+    <div class="explore-card__featured">
+      <p class="explore-card__lead">
+        Closest target cell
+        <span class="mono">{{ example.featured.cellId }}</span>
+      </p>
+      <ol class="mini-ranks">
+        @each(candidate in example.featured.candidates)
+          <li class="mini-ranks__item">
+            <span class="mini-ranks__rank">#{{ candidate.rank }}</span>
+            <span class="mini-ranks__id mono">{{ candidate.cellId }}</span>
+            <span class="mini-ranks__distance readout">{{ candidate.distance }}</span>
+          </li>
+        @end
+      </ol>
+    </div>
+  @end
+
+  <button
+    type="button"
+    class="btn btn--secondary btn--sm"
+    data-world="{{ example.world }}"
+    data-region="{{ example.region }}"
+    data-reference="{{ example.reference }}"
+    @click="useSetup($el.dataset.world, $el.dataset.region, $el.dataset.reference)"
+  >
+    Use this setup
+  </button>
+</article>

@@ -1,0 +1,57 @@
+{{--
+  Ranked Earth candidates for one target cell. Expects `cell` from
+  presentCellCandidates(). Distances are "lower = closer", never percentages.
+--}}
+<article class="cell-detail">
+  <header class="cell-detail__header">
+    <p class="tag">Target cell</p>
+    <h3 class="cell-detail__title mono">{{ cell.target.cellId }}</h3>
+    <p class="cell-detail__meta">{{ cell.target.title }} · {{ cell.target.coordinates }}</p>
+    <dl class="terrain">
+      @each(row in cell.target.terrain)
+        <div class="terrain__item {{ row.selected ? '' : 'is-unselected' }}">
+          <dt>{{ row.label }}</dt>
+          <dd class="readout">{{ row.value }}</dd>
+        </div>
+      @end
+    </dl>
+  </header>
+
+  <p class="cell-detail__hint">
+    Bars show each selected feature's difference, target minus Earth, in Earth-reference robust units (scale ±{{ cell.scale }}).
+    <span class="key key--higher">target higher</span>
+    <span class="key key--lower">target lower</span>
+    Longer bars add more to the distance.
+  </p>
+
+  <ol class="candidates">
+    @each(candidate in cell.candidates)
+      <li class="candidate">
+        <div class="candidate__head">
+          <span class="candidate__rank">#{{ candidate.rank }}</span>
+          <span class="candidate__id mono">{{ candidate.cellId }}</span>
+          <span class="candidate__distance">
+            <span class="readout">{{ candidate.distance }}</span>
+            <span class="candidate__unit">distance</span>
+          </span>
+        </div>
+        <p class="candidate__meta">Earth · {{ candidate.region }} · {{ candidate.coordinates }}</p>
+        <ul class="diffs">
+          @each(bar in candidate.bars)
+            <li class="diff">
+              <span class="diff__label">{{ bar.label }}</span>
+              <span class="diff__track" aria-hidden="true">
+                <span
+                  class="diff__bar diff__bar--{{ bar.direction }}"
+                  style="--w: {{ bar.widthPct }}%"
+                ></span>
+              </span>
+              <span class="diff__value readout">{{ bar.z }}</span>
+              <span class="diff__detail">{{ bar.detail }}</span>
+            </li>
+          @end
+        </ul>
+      </li>
+    @end
+  </ol>
+</article>

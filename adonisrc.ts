@@ -48,6 +48,7 @@ export default defineConfig({
     () => import('@adonisjs/shield/shield_provider'),
     () => import('@adonisjs/static/static_provider'),
     () => import('#providers/duckdb_provider'),
+    () => import('#providers/discovery_provider'),
   ],
 
   /*

@@ -3,6 +3,9 @@
    Tokens are the only thing you need to touch to re-theme.
    ========================================================================== */
 
+/* Discovery page styles (Phase 4); kept separate from the kit's styles. */
+@import './discovery.css';
+
 :root {
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;

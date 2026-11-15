@@ -1,0 +1,146 @@
+{{--
+  Results of one discovery run (Analyze → Understand). Expects `results`
+  from presentRun() plus `selectedCellId` and `cell`.
+--}}
+<div class="run" x-data="cellGrid" data-query="{{ results.query }}" @click="select($event)">
+  <header class="run__config">
+    <p class="run__target">
+      <strong>{{ results.configuration.target }}</strong>
+      <span class="run__vs">compared with</span>
+      <strong>{{ results.configuration.reference }}</strong>
+    </p>
+    <p class="run__meta">
+      Features:
+      {{ results.configuration.features.join(', ') }}
+      · top
+      {{ results.configuration.topN }}
+      per cell ·
+      <span class="readout">{{ results.timing }}</span>
+    </p>
+  </header>
+
+  <dl class="stats">
+    <div class="stat">
+      <dt class="stat__label">Target cells ranked</dt>
+      <dd class="stat__value readout">{{ results.summary.targetCellCount }}</dd>
+      <dd class="stat__note">cells with ≥ 95% data coverage</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Median best distance</dt>
+      <dd class="stat__value readout">{{ results.summary.median }}</dd>
+      <dd class="stat__note">lower = closer · not a percentage</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Best distance range</dt>
+      <dd class="stat__value readout">{{ results.summary.min }}–{{ results.summary.max }}</dd>
+      <dd class="stat__note">middle half {{ results.summary.q25 }}–{{ results.summary.q75 }}</dd>
+    </div>
+    <div class="stat">
+      <dt class="stat__label">Candidate diversity</dt>
+      <dd class="stat__value readout">{{ results.diversity.pct }}</dd>
+      <dd class="stat__note">
+        {{ results.diversity.uniqueCount }}
+        Earth cells are the best match for
+        {{ results.diversity.targetCount }}
+        target cells
+      </dd>
+    </div>
+    @if(results.diversity.mostReused)
+      <div class="stat">
+        <dt class="stat__label">Most reused Earth cell</dt>
+        <dd class="stat__value stat__value--id mono">{{ results.diversity.mostReused.cellId }}</dd>
+        <dd class="stat__note">
+          best match for
+          {{ results.diversity.mostReused.count }}
+          target cells ({{ results.diversity.mostReused.share }})
+        </dd>
+      </div>
+    @end
+  </dl>
+
+  <div class="run__body">
+    <section class="grid-panel" aria-labelledby="grid-title">
+      <h3 id="grid-title" class="block-title">Target cells</h3>
+      <p class="block-desc">
+        Each square is a 5 km cell, shaded by its best-match distance compared with the rest of this run. Select a cell to see its Earth candidates.
+      </p>
+
+      <div class="cell-grid-wrap" x-ref="wrap">
+        <div
+          class="cell-grid"
+          style="--cols: {{ results.grid.columns }}; --rows: {{ results.grid.rows }}"
+          @pointerover="show($event)"
+          @pointerleave="hide()"
+          @focusin="show($event)"
+          @focusout="hide()"
+        >
+          @include('partials/grid_cells')
+        </div>
+
+        <div
+          class="tip"
+          role="tooltip"
+          x-show="tip.visible"
+          x-cloak
+          :style="`left: ${tip.x}px; top: ${tip.y}px`"
+        >
+          <span class="tip__value readout" x-text="tip.value"></span>
+          <span class="tip__title mono" x-text="tip.title"></span>
+          <span class="tip__detail" x-text="tip.detail"></span>
+        </div>
+      </div>
+
+      <ul class="legend" aria-label="Best-match distance, relative to this run">
+        @each(entry in results.grid.legend)
+          <li class="legend__item">
+            <span class="legend__swatch" data-band="{{ entry.band }}"></span>
+            {{ entry.label }}
+          </li>
+        @end
+
+        <li class="legend__item">
+          <span class="legend__swatch legend__swatch--excluded"></span>
+          Excluded (&lt; 95% coverage)
+        </li>
+      </ul>
+
+      <details class="closest">
+        <summary>Closest {{ results.grid.closest.length }} target cells (table)</summary>
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Target cell</th>
+              <th scope="col" class="num">Best distance</th>
+              <th scope="col">Best Earth cell</th>
+            </tr>
+          </thead>
+          <tbody>
+            @each(row in results.grid.closest)
+              <tr>
+                <td>
+                  <a class="mono" href="{{ row.href }}" data-cell="{{ row.cellId }}">
+                    {{ row.cellId }}
+                  </a>
+                </td>
+                <td class="num readout">{{ row.distanceText }}</td>
+                <td class="mono">{{ row.bestEarthCellId }}</td>
+              </tr>
+            @end
+          </tbody>
+        </table>
+      </details>
+    </section>
+
+    <section
+      id="cell-candidates"
+      class="candidates-panel"
+      aria-label="Earth candidates for the selected target cell"
+      :class="{ 'is-loading': $store.ui.loading }"
+    >
+      @if(results.cell)
+        @!component('partials/cell_candidates', { cell: results.cell })
+      @end
+    </section>
+  </div>
+  @include('partials/limitations')
+</div>

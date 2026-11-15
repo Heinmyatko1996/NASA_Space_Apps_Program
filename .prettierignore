@@ -1,3 +1,6 @@
 .adonisjs
 node_modules
 build
+
+# One line per grid cell on purpose (response size); see the file header
+resources/views/partials/grid_cells.edge
