@@ -28,6 +28,29 @@ export const FIXTURE_FILES = [
 const ALL_FEATURES = "['mean_slope_deg', 'robust_relief_m', 'slope_stddev_deg']"
 
 /**
+ * Rewrites the relative `'data/processed/parquet/…'` paths in TerraTwin SQL
+ * to absolute paths under `root`, for a DuckDB instance that must read the
+ * fixture.
+ *
+ * `file_search_path` alone is not enough: DuckDB resolves a relative path
+ * against the process working directory first and only then searches
+ * `file_search_path`. Tests and the fixture command run from the app root,
+ * so with Hein's real files in `data/processed/parquet/`, an unpinned
+ * "fixture" instance would silently read the real data.
+ *
+ * Throws if a relative path survives, so a new path form fails loudly
+ * instead of falling back to the real files.
+ */
+export function pinParquetPaths(sql: string, root: string): string {
+  const absolute = join(root, FIXTURE_PARQUET_DIR).replaceAll("'", "''")
+  const pinned = sql.replaceAll(`'${FIXTURE_PARQUET_DIR}/`, `'${absolute}/`)
+  if (pinned.replaceAll(absolute, '').includes(FIXTURE_PARQUET_DIR)) {
+    throw new Error(`Unpinned ${FIXTURE_PARQUET_DIR} path left in SQL; update pinParquetPaths`)
+  }
+  return pinned
+}
+
+/**
  * One row per region: grid index range (inclusive, may be negative like the
  * real `…_r-7_c-3` IDs), anchor coordinates, degrees per grid step, and
  * value ranges per feature.
@@ -90,12 +113,14 @@ export async function writeTerraTwinFixture(root: string, appRoot: string) {
   const parquetDir = join(root, FIXTURE_PARQUET_DIR)
   await mkdir(parquetDir, { recursive: true })
 
-  const runDiscoverySql = await readFile(
-    join(appRoot, 'queries/discovery/run_discovery.sql'),
-    'utf8'
+  // The baseline must rank the fixture terrain written above, not whatever
+  // sits in the working directory's data/processed/parquet/.
+  const runDiscoverySql = pinParquetPaths(
+    await readFile(join(appRoot, 'queries/discovery/run_discovery.sql'), 'utf8'),
+    root
   )
 
-  const instance = await DuckDBInstance.create(':memory:', { file_search_path: root })
+  const instance = await DuckDBInstance.create(':memory:')
   const connection = await instance.connect()
   const out = (name: string) => `'${join(parquetDir, name).replaceAll("'", "''")}'`
 
