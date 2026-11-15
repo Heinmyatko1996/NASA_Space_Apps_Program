@@ -348,6 +348,7 @@ Invalid settings return a 422 notice listing the problems, and an unknown cell r
 - [ ] **7.1 Production Build & Containerization:**
   - Verify `node ace build` bundles assets and copies `queries/**/*.sql`, `database/*.sql`, and the three Parquet files (via `metaFiles`). The DuckDB database is rebuilt in memory on every boot, so no database file is deployed, and the host needs neither Python nor GDAL.
   - Deploy to a Node.js 24+ host (Railway, Fly.io, or Render), with gzip or brotli enabled at the host or a reverse proxy: a discovery fragment is about 170 KB uncompressed.
+  - **Status (2026-11-15):** the build half is verified: `node ace build` copies `database/*.sql`, `queries/**/*.sql`, and the three Parquet files, and `node bin/server.js` in `build/` boots, serves results, and stops with the `checks.sql` message when a Parquet file is missing. Not done yet: no container file, no host, no compression setup.
 - [ ] **7.2 README (`README.md`, deleted on `dev`):**
   - How to run the app, how the data is built (link to 2.3 and Hein's `docs/methodology/data_sources.md`), the scoring model, the limitations, and the NASA dataset citations.
 - [ ] **7.3 Final Submission Checklist:**
@@ -357,6 +358,8 @@ Invalid settings return a 422 notice listing the problems, and an unknown cell r
 ---
 
 ## 4. Verification Criteria & Definition of Done
+
+**Status (2026-11-15, after Phase 6):** criteria 1, 2, 4, 5, 6, and 7 are met. For 2, the seven files in `queries/` the app loads are identical to `main`. Criterion 3 is met except one wording detail: candidate cards label the number "distance", while "lower = closer" appears in the stat tiles, the limitations panel, and the detail dialog, not on each card.
 
 1. **End-to-End Hypermedia Flow:** Changing the world, region, features, or top-N and submitting updates the UI via Alpine-swapped Edge partials with zero full-page reloads. Every result URL reproduces the same result when opened.
 2. **Hein's Model, Unmodified:** Rankings come from `run_discovery` and details from `get_candidate_details` in `queries/`, unchanged. App-specific SQL lives only in `database/`. Custom runs never display baseline summaries.
