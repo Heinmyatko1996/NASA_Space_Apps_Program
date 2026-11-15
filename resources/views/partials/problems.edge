@@ -1,0 +1,12 @@
+{{-- Validation or lookup problems, swapped in instead of results. Expects `problems`. --}}
+<div class="notice notice--error" role="alert">
+  <p class="notice__title">
+    @svg('lucide:circle-alert', { width: 16, height: 16 })
+    <span>Check the settings and try again</span>
+  </p>
+  <ul class="notice__list">
+    @each(problem in problems)
+      <li>{{ problem.message }}</li>
+    @end
+  </ul>
+</div>

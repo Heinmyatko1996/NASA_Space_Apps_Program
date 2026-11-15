@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DuckDBInstance } from '@duckdb/node-api'
 
@@ -17,6 +17,13 @@ import { DuckDBInstance } from '@duckdb/node-api'
  */
 
 export const FIXTURE_PARQUET_DIR = 'data/processed/parquet'
+
+/** The files written, by name, inside FIXTURE_PARQUET_DIR. */
+export const FIXTURE_FILES = [
+  'planet_terrain_features_5km_500m.parquet',
+  'planet_similarity_features_5km_500m.parquet',
+  'terrain_analog_rankings_5km_500m.parquet',
+] as const
 
 const ALL_FEATURES = "['mean_slope_deg', 'robust_relief_m', 'slope_stddev_deg']"
 
@@ -74,12 +81,13 @@ const TERRAIN_SQL = `
 `
 
 /**
- * Writes the fixture Parquet files under `<root>/data/processed/parquet/`,
- * replacing any previous fixture. `appRoot` is where Hein's `queries/` live.
+ * Writes the three fixture Parquet files under `<root>/data/processed/parquet/`,
+ * overwriting files with the same names and touching nothing else. `appRoot`
+ * is where Hein's `queries/` live. Callers decide whether overwriting is safe
+ * (the terratwin:fixture command refuses to replace existing files).
  */
 export async function writeTerraTwinFixture(root: string, appRoot: string) {
   const parquetDir = join(root, FIXTURE_PARQUET_DIR)
-  await rm(root, { recursive: true, force: true })
   await mkdir(parquetDir, { recursive: true })
 
   const runDiscoverySql = await readFile(

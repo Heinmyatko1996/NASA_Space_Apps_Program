@@ -54,18 +54,23 @@ planetary-analog-finder/
 │   │   └── analogs_controller.ts       # Full page + Edge partial endpoints
 │   ├── exceptions/
 │   │   └── discovery_error.ts          # run_discovery error() messages → 422 field errors
+│   ├── presenters/
+│   │   └── discovery_presenter.ts      # Service results → labels, formatted numbers, grid, bars
 │   ├── services/
 │   │   ├── duckdb_service.ts           # Holds the DuckDB instance; typed query helpers
 │   │   ├── discovery_service.ts        # Calls the TerraTwin macros; maps rows to view models
 │   │   └── map_snapshot_service.ts     # NASA GIBS URLs + marker positions
 │   └── validators/
 │       └── discovery_validator.ts      # VineJS validation against the cached catalog
+├── commands/
+│   └── terratwin_fixture.ts            # node ace terratwin:fixture: synthetic data for local dev
 ├── data/
 │   └── processed/parquet/              # The 3 Parquet files from Hein's pipeline (committed)
 ├── database/
 │   ├── checks.sql                      # Boot-time data checks: files, columns, regions
 │   ├── app_macros.sql                  # App-owned macros + discovery_cache, built on run_discovery
-│   └── macro_scripts.ts                # Ordered list of macro SQL files (provider + tests)
+│   ├── macro_scripts.ts                # Ordered list of macro SQL files (provider + tests)
+│   └── fixtures/terratwin_fixture.ts   # Synthetic Parquet generator (tests + fixture command)
 ├── docs/                               # Hein (from main): methodology and SQL/API contracts
 ├── queries/                            # Hein (from main): TerraTwin SQL macros and catalog queries
 │   ├── api/                            # get_catalog, get_reference_regions, get_ranked_candidates,
@@ -77,21 +82,25 @@ planetary-analog-finder/
 │   └── discovery_provider.ts           # Binds DiscoveryService as a singleton
 ├── resources/
 │   ├── css/
-│   │   └── app.css                     # Kit design tokens, tuned to a dark telemetry theme
+│   │   ├── app.css                     # Kit design tokens, tuned to a dark telemetry theme
+│   │   └── discovery.css               # Discovery page styles and validated data colors
 │   ├── js/
 │   │   └── app.js                      # Alpine components: partial swaps, presets, map layers
 │   └── views/
 │       ├── components/
 │       │   ├── earth_map.edge          # Full-globe NASA Earth image + graticule + markers
-│       │   ├── cell_grid.edge          # SVG grid of target-region cells colored by distance
 │       │   └── layouts/
 │       │       └── main.edge           # Base HTML shell (@vite loads app.css + app.js)
 │       ├── pages/
 │       │   └── home.edge               # Explore cards + Configure form + Results + Map
 │       └── partials/
+│           ├── explore_card.edge       # Baseline example card (Explore)
 │           ├── region_list.edge        # Swapped on World change (Moon <-> Mars)
 │           ├── discovery_results.edge  # Run summary + cell grid + candidates for the best cell
+│           ├── grid_cells.edge         # Target cell grid, one line per cell (prettier-ignored)
 │           ├── cell_candidates.edge    # Ranked Earth candidates for one target cell
+│           ├── problems.edge           # 422/404 notices swapped in place of results
+│           ├── limitations.edge        # Limits shown with every result
 │           ├── analog_map.edge         # Atacama inset with positioned candidate markers
 │           └── candidate_detail.edge   # Side-by-side target vs Earth comparison (modal)
 ├── start/
@@ -255,27 +264,40 @@ Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run 
 ### Phase 4: Hypermedia UI & 4-Stage Journey Wiring (Hours 13–22)
 **Objective:** Build the server-rendered Edge views and partials. Alpine.js, which the kit already bundles, fetches the partials and swaps them into the page, so every user action updates the UI without a page reload.
 
-- [ ] **4.1 Add a Partial-Swap Helper (`resources/js/app.js`):**
-  - Register an `Alpine.magic('swap', …)` helper (about 15 lines) that `fetch`es an Edge partial URL and replaces a target element's `innerHTML`. Alpine's mutation observer initializes any Alpine markup inside the new HTML automatically.
-  - Track a shared `loading` flag in an `Alpine.store('ui')` to drive skeleton loaders.
-  - All partial endpoints are read-only `GET` routes under `/partials/*`, so the helper needs no CSRF token.
-- [ ] **4.2 Explore Cards (`home.edge`, rendered at page load):**
-  - One card each for Moon / South Pole and Mars / Jezero from `DiscoveryService.baseline()`: target cell count, median and range of best-match distances, candidate diversity (e.g., Moon 20.68%, Mars 48.89%), and the featured cell's top 3 Earth candidates.
-  - Label them "Baseline example: all three features, Atacama reference". A "Use this setup" button pre-fills the Configure form.
-- [ ] **4.3 Configure Form (`partials/region_list.edge`):**
-  - Radio buttons for **Moon** / **Mars** call `$swap('/partials/regions?world=Moon', '#region-selector')`, which renders that world's regions from the catalog with each region's eligible cell count.
-  - Earth reference region `<select>` filled from `referenceRegions()`. While Atacama is the only option, show a note: "More Earth regions are coming; results are the best analogs within Atacama."
-  - One checkbox per catalog feature, using `feature_label`, `unit`, and `description` as help text, and pre-checked from `default_selected`.
-  - A top-N number input (1–25, default 10), described as "Earth candidates per target cell".
-  - Optional quick presets that only set feature checkboxes and submit: *Full terrain (baseline)* = all three; *Rover traverse* = mean slope + slope variability; *Landing zone survey* = mean slope.
-- [ ] **4.4 Analyze → Results (`partials/discovery_results.edge`):**
-  - The form uses `@submit.prevent` to call `$swap('/partials/discover?' + new URLSearchParams(new FormData($el)), '#results')`, then `history.replaceState` puts the same query string in the page URL so a result can be shared and reproduced.
-  - Render a configuration line (world, region, reference, features, top-N), the run summary and diversity from `custom_discovery_summary` / `custom_candidate_diversity`, the target cell grid (Phase 5.2), and the candidate list for the best-matching cell.
-- [ ] **4.5 Understand → Ranked Candidates (`partials/cell_candidates.edge`):**
-  - Clicking a grid cell calls `$swap('/partials/cells/:cellId?' + configQuery, '#cell-candidates')`. Every partial receives the full configuration in its query string, so the server stays stateless.
-  - Each candidate card shows the rank, the Earth cell ID, the distance to 2 decimal places labeled "distance (lower = closer)", and one horizontal bar per selected feature centered on zero, from the signed `*_difference_z` values. Bar direction shows whether the target is higher or lower than the Earth cell; bar length shows that feature's contribution.
-  - Never show a percentage. A color band is allowed if it is relative to this run's quartiles and says so (e.g., "best 25% of matches in this run").
-  - A limitations footer on every result: Atacama is the only Earth reference; distance is not a probability or percentage; elevation isn't compared across bodies; terrain similarity alone doesn't establish landing-site safety.
+Built on branch `phase-4-ui` (from `phase-3-discovery-service`) before Phase 2 landed.
+
+**Local development before Phase 2 lands:**
+- `node ace terratwin:fixture` writes the synthetic test data into `data/processed/parquet/`. It refuses to overwrite existing files, which may be Hein's real data, unless given `--force`. The values are fake: never demo or commit them.
+- `providers/duckdb_provider.ts` temporarily registers `MACRO_SCRIPTS` at boot. Phase 2 changes the same line to `['database/checks.sql', ...MACRO_SCRIPTS]`; keep Phase 2's version when merging.
+- Until Phase 2's `.gitignore` rules land, keep `data/` out of git locally: add `/data/` to `.git/info/exclude`.
+
+**Routes** (`app/controllers/analogs_controller.ts`, data shaped by `app/presenters/discovery_presenter.ts`):
+
+| Route | Returns |
+|---|---|
+| `GET /` | The full page. With a configuration in the query string (a shared link, or the form submitted without JavaScript), the results are rendered in too; `cell=` picks the target cell. |
+| `GET /partials/regions?world=` | Target region radios for one world |
+| `GET /partials/discover?…` | Run summary, cell grid, and candidates for the best cell |
+| `GET /partials/cells/:cellId?…` | Ranked Earth candidates for one target cell |
+
+Invalid settings return a 422 notice listing the problems, and an unknown cell returns 404. Both are swapped in like any other partial.
+
+- [x] **4.1 Add a Partial-Swap Helper (`resources/js/app.js`):**
+  - `Alpine.magic('swap', …)` fetches a partial and replaces the target's `innerHTML`. It also swaps in 4xx bodies (readable notices), drops a response if a newer swap of the same target has started, and sets `aria-busy`. `$store.ui.loading` drives a dimmed loading state and the "Ranking terrain…" status line.
+- [x] **4.2 Explore Cards (`partials/explore_card.edge`):**
+  - One card per target region from `baseline()`: target cells, median and range of best-match distance, candidate diversity, and the top 3 Earth candidates of the closest target cell. "Use this setup" selects that region with all features and Atacama, then runs it.
+- [x] **4.3 Configure Form (`pages/home.edge`, `partials/region_list.edge`):**
+  - World radios swap in that world's regions. The reference `<select>` shows the "best analogs within Atacama" note while it's the only region. Feature checkboxes (`features[]`) come from the catalog with unit and description. Top-N input from 1 to 25. Presets: *Full terrain (baseline)*, *Rover traverse*, *Landing zone survey*.
+  - The form is a plain `GET /` and works without JavaScript; with JavaScript it swaps only the results and writes the same query string to the address bar.
+- [x] **4.4 Analyze → Results (`partials/discovery_results.edge`):**
+  - Configuration line with timing, stat tiles (cells ranked, median best distance, range and middle half, candidate diversity, most reused Earth cell), the target cell grid, and the best cell's candidates.
+  - The grid (`partials/grid_cells.edge`) is the basic version of 5.2, built here because results need something to click: a CSS grid placed by `grid_row`/`grid_col` (offset from negative indexes, rows flipped so north is up), four quartile bands relative to this run, hatched excluded cells, a tooltip on hover and focus, and a "closest 10 cells" table as the non-hover view. Each cell is a link (`/?…&cell=`), so selection also works without JavaScript and is shareable.
+  - Data colors are validated palette steps (dataviz skill): an ordinal blue ramp for the bands (closest is strongest; flipped for dark mode) and blue/red for signed differences, all passing the validator against the app's own card colors.
+- [x] **4.5 Understand → Ranked Candidates (`partials/cell_candidates.edge`):**
+  - Target cell header with coordinates and terrain values. Candidate cards show the rank, the full Earth cell ID, the distance to 2 decimals labeled "distance", and one bar per selected feature centered on zero (red = target higher, blue = target lower), with the signed value and both original values in text.
+  - No percentage appears next to a distance (covered by a test). `partials/limitations.edge` is shown with every result.
+- **Verified:** 38 unit and HTTP tests (the HTTP tests swap in a fixture-backed `DiscoveryService`). A headless-browser run covered the full flow and the light and dark themes, with no horizontal overflow at 390 px.
+- **Size note:** a discovery fragment is about 170 KB uncompressed (~400 grid cells). `grid_cells.edge` stays on one line per cell and is listed in `.prettierignore`, because formatting would add about 50 KB. Serve with compression in production (7.1).
 
 ---
 
@@ -285,7 +307,7 @@ Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run 
 - [ ] **5.1 Build `MapSnapshotService` (`app/services/map_snapshot_service.ts`):**
   - Given a bounding box, build a NASA GIBS WMS `GetMap` URL (`EPSG:4326`, fixed width/height, `image/jpeg`). WMS 1.3.0 expects the `EPSG:4326` `BBOX` in lat/lon axis order.
   - Project each candidate's lat/lon to `left %` / `top %` inside that box. EPSG:4326 imagery is equirectangular, so the projection is a linear interpolation.
-- [ ] **5.2 Render the Target Cell Grid (`resources/views/components/cell_grid.edge`):**
+- [x] **5.2 Render the Target Cell Grid: built in Phase 4 as a CSS grid (`partials/grid_cells.edge`), not SVG. Only the stretch goal below remains.**
   - An inline SVG with one square per row of `target_cells(planet, region)`, placed by `grid_col` / `grid_row` after offsetting by their minimum. Check the row direction against `latitude_center` and flip if needed so north is up.
   - Fill eligible cells by best-match distance using this run's quartile bands, and hatch ineligible cells with the tooltip "excluded: < 95% data coverage". Each cell is a button that loads its candidates (4.5); the selected cell gets an outline.
   - A grid instead of planetary imagery is intentional: the Moon South Pole region lies near −88° latitude, where equirectangular imagery and linear marker projection break down. Solar System Treks polar imagery behind the grid is a stretch goal.
@@ -326,7 +348,7 @@ Built on branch `phase-3-discovery-service` in parallel with Phase 2. Tests run 
 
 - [ ] **7.1 Production Build & Containerization:**
   - Verify `node ace build` bundles assets and copies `queries/**/*.sql`, `database/*.sql`, and the three Parquet files (via `metaFiles`). The DuckDB database is rebuilt in memory on every boot, so no database file is deployed, and the host needs neither Python nor GDAL.
-  - Deploy to a Node.js 24+ host (Railway, Fly.io, or Render).
+  - Deploy to a Node.js 24+ host (Railway, Fly.io, or Render), with gzip or brotli enabled at the host or a reverse proxy: a discovery fragment is about 170 KB uncompressed.
 - [ ] **7.2 README (`README.md`, deleted on `dev`):**
   - How to run the app, how the data is built (link to 2.3 and Hein's `docs/methodology/data_sources.md`), the scoring model, the limitations, and the NASA dataset citations.
 - [ ] **7.3 Final Submission Checklist:**

@@ -4,7 +4,7 @@ import logger from '@adonisjs/core/services/logger'
 import { MACRO_SCRIPTS } from '#database/macro_scripts'
 import DiscoveryService from '#services/discovery_service'
 import DuckDbService from '#services/duckdb_service'
-import { writeTerraTwinFixture } from '#tests/helpers/terratwin_fixture'
+import { writeTerraTwinFixture } from '#database/fixtures/terratwin_fixture'
 
 let fixtureRoot: Promise<string> | null = null
 

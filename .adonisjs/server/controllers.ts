@@ -3,4 +3,6 @@
  * DO NOT EDIT manually
  */
 
-export const controllers = {}
+export const controllers = {
+  Analogs: () => import('#controllers/analogs_controller'),
+}

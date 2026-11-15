@@ -1,0 +1,13 @@
+{{-- Target region radios for one world. Expects `regions`. --}}
+@each(region in regions)
+  <label class="choice">
+    <input
+      type="radio"
+      name="region"
+      value="{{ region.region }}"
+      {{ region.checked ? 'checked' : '' }}
+    />
+    <span class="choice__label">{{ region.label }}</span>
+    <span class="choice__meta">{{ region.eligibleCellCount }} cells</span>
+  </label>
+@end

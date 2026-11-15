@@ -1,11 +1,16 @@
 import { readFile } from 'node:fs/promises'
 import type { ApplicationService } from '@adonisjs/core/types'
+import { MACRO_SCRIPTS } from '#database/macro_scripts'
 import DuckDbService from '#services/duckdb_service'
 
 /**
  * SQL scripts that build the database, run in this order in one transaction.
+ *
+ * Temporary (phase-4-ui): registers the TerraTwin macros so the UI runs
+ * locally. Phase 2 (step 2.4) replaces this line with
+ * ['database/checks.sql', ...MACRO_SCRIPTS]; keep that version on merge.
  */
-const SCRIPTS = ['database/schema.sql', 'database/seed.sql']
+const SCRIPTS = [...MACRO_SCRIPTS]
 
 /**
  * Builds the app's DuckDB database in memory at every boot from the SQL
